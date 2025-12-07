@@ -112,3 +112,31 @@ Level 3 (Episode MPI Parallel):
 - total_episodes = 256
 - np = [1,2,4,8]
 - n_envs_per_rank = 1
+
+
+# Github workflow
+### only once when creating branch
+git clone 
+
+git checkout develop
+git pull origin develop
+
+git checkout -b feature/level1-A
+git checkout -b feature/level2-B
+git checkout -b feature/level3-C
+git checkout -b feature/testing-D
+
+git push origin <branch>
+
+
+### push changes
+git add .
+git commin -m "..."
+git push origin <branch>
+
+than create pr -> merge with develop
+
+### keeping branch updated with develop
+git checkout <branch>
+git pull origin develop
+git push origin <branch>
