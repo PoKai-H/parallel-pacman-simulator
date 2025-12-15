@@ -1,12 +1,10 @@
 // csrc/step_apply_sequential.c
-// Sequential baseline for the Pacman environment.
-// Python chooses all actions and pacman_speed.
-// This function only applies actions, updates positions, checks walls,
-// detects capture, computes rewards, and sets the done flag.
-
 #include "common.h"
 
-// Helpers
+// ==========================================
+// Helper Functions (Internal)
+// ==========================================
+
 static inline int grid_idx(int y, int x, int width) {
     return y * width + x;
 }
@@ -15,13 +13,12 @@ static inline int in_bounds(int y, int x, int h, int w) {
     return (y >= 0 && y < h && x >= 0 && x < w);
 }
 
-// grid: 0 = empty, 1 = wall, 2 = pellet (unused in minimal version)
-static inline int is_wall(const int *grid, int y, int x, int h, int w) {
-    if (!in_bounds(y, x, h, w)) return 1; // out-of-bounds treated as wall
+// 注意：這裡配合 common.h 改成了 const int8_t *grid
+static inline int is_wall(const int8_t *grid, int y, int x, int h, int w) {
+    if (!in_bounds(y, x, h, w)) return 1; 
     return grid[grid_idx(y, x, w)] == 1;
 }
 
-// 0=stay, 1=up, 2=down, 3=left, 4=right
 static void action_to_delta(int action, int *dx, int *dy) {
     switch (action) {
         case 1: *dx = 0;  *dy = -1; break; // up
@@ -33,116 +30,102 @@ static void action_to_delta(int action, int *dx, int *dy) {
     }
 }
 
-void step_env_apply_actions_sequential(
-    int grid_h, int grid_w,
-    const int *grid,
-    int n_agents,
-    const AgentState *ghosts_in,
-    const int *ghost_actions,
-    AgentState *ghosts_out,
-    int pacman_x_in,
-    int pacman_y_in,
-    int pacman_action,
-    int pacman_speed,   // 0,1,2 (max speed = 2)
-    int *pacman_x_out,
-    int *pacman_y_out,
-    float *ghost_rewards,
-    float *pacman_reward,
-    int *done
-) {
-    // ----- init rewards & done flag -----
-    for (int i = 0; i < n_agents; i++) {
-        ghost_rewards[i] = 0.0f;
+// ==========================================
+// Main Kernel Implementation
+// ==========================================
+
+void step_env_apply_actions_sequential(EnvState *s) {
+    // 1. Init rewards & done flag
+    // ------------------------------------------------
+    for (int i = 0; i < s->n_agents; i++) {
+        s->ghost_rewards[i] = 0.0f;
     }
-    *pacman_reward = 0.0f;
-    *done = 0;
+    s->pacman_reward = 0.0f;
+    s->done = 0;
 
-    // ----- copy initial ghost states -----
-    for (int i = 0; i < n_agents; i++) {
-        ghosts_out[i] = ghosts_in[i];
-    }
+    // 2. Setup Local Variables for Clean Access
+    // ------------------------------------------------
+    // Copy input pacman state locally to mutate during sub-steps
+    int pac_x = s->pacman_x_in;
+    int pac_y = s->pacman_y_in;
+    int pm_speed = s->pacman_speed;
 
-    int pac_x = pacman_x_in;
-    int pac_y = pacman_y_in;
+    // Safety clamp
+    if (pm_speed < 0) pm_speed = 0;
+    if (pm_speed > 2) pm_speed = 2;
 
-    // Clamp pacman_speed to [0, 2] for safety
-    if (pacman_speed < 0) pacman_speed = 0;
-    if (pacman_speed > 2) pacman_speed = 2;
+    // 3. Move Ghosts
+    // ------------------------------------------------
+    for (int i = 0; i < s->n_agents; i++) {
+        // Read from input buffer
+        AgentState current = s->ghosts_in[i];
 
-    // =========================
-    // 1) Move ghosts (speed = 1)
-    // =========================
-    for (int i = 0; i < n_agents; i++) {
-        if (!ghosts_in[i].alive) {
-            // keep as is
-            ghosts_out[i] = ghosts_in[i];
+        if (!current.alive) {
+            s->ghosts_out[i] = current; // Direct copy if dead
             continue;
         }
 
         int dx = 0, dy = 0;
-        action_to_delta(ghost_actions[i], &dx, &dy);
+        action_to_delta(s->ghost_actions[i], &dx, &dy);
 
-        int nx = ghosts_in[i].x + dx;
-        int ny = ghosts_in[i].y + dy;
+        int nx = current.x + dx;
+        int ny = current.y + dy;
 
-        if (is_wall(grid, ny, nx, grid_h, grid_w)) {
-            // stay if next is wall
-            ghosts_out[i].x = ghosts_in[i].x;
-            ghosts_out[i].y = ghosts_in[i].y;
+        // Use 's->' to access grid dimensions and data
+        if (is_wall(s->grid, ny, nx, s->grid_h, s->grid_w)) {
+            // Hit wall: stay put
+            s->ghosts_out[i].x = current.x;
+            s->ghosts_out[i].y = current.y;
         } else {
-            ghosts_out[i].x = nx;
-            ghosts_out[i].y = ny;
+            // Move
+            s->ghosts_out[i].x = nx;
+            s->ghosts_out[i].y = ny;
         }
-        ghosts_out[i].alive = ghosts_in[i].alive; // minimal version: no death
+        s->ghosts_out[i].alive = current.alive;
     }
 
-    // =========================
-    // 2) Move Pacman (speed = pacman_speed)
-    // =========================
+    // 4. Move Pacman (Sub-steps)
+    // ------------------------------------------------
     {
         int dx = 0, dy = 0;
-        action_to_delta(pacman_action, &dx, &dy);
+        action_to_delta(s->pacman_action, &dx, &dy);
 
-        for (int s = 0; s < pacman_speed; s++) {
+        for (int step = 0; step < pm_speed; step++) {
             int nx = pac_x + dx;
             int ny = pac_y + dy;
 
-            // stop if next cell is a wall
-            if (is_wall(grid, ny, nx, grid_h, grid_w)) {
-                break;
+            if (is_wall(s->grid, ny, nx, s->grid_h, s->grid_w)) {
+                break; // Stop at wall
             }
-
             pac_x = nx;
             pac_y = ny;
-
-            // minimal version: we only check capture after all movement
-            // (no sub-step capture)
         }
     }
 
-    // =========================
-    // 3) Detect capture (after movement)
-    // =========================
+    // 5. Detect Capture
+    // ------------------------------------------------
     int captured = 0;
-    for (int i = 0; i < n_agents; i++) {
-        if (!ghosts_out[i].alive) continue;
-        if (ghosts_out[i].x == pac_x && ghosts_out[i].y == pac_y) {
+    for (int i = 0; i < s->n_agents; i++) {
+        // Check against NEW ghost positions
+        if (!s->ghosts_out[i].alive) continue;
+        
+        if (s->ghosts_out[i].x == pac_x && s->ghosts_out[i].y == pac_y) {
             captured = 1;
-            break;
+            break; 
         }
     }
 
+    // 6. Finalize Outputs
+    // ------------------------------------------------
     if (captured) {
-        for (int i = 0; i < n_agents; i++) {
-            ghost_rewards[i] = 1.0f;
+        for (int i = 0; i < s->n_agents; i++) {
+            s->ghost_rewards[i] = 1.0f;
         }
-        *pacman_reward = -1.0f;
-        *done = 1;
+        s->pacman_reward = -1.0f;
+        s->done = 1;
     }
 
-    // =========================
-    // 4) Write back Pacman position
-    // =========================
-    *pacman_x_out = pac_x;
-    *pacman_y_out = pac_y;
+    // Write back Pacman final position to the struct
+    s->pacman_x_out = pac_x;
+    s->pacman_y_out = pac_y;
 }
