@@ -6,9 +6,6 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 import numpy as np
-# --- 加入這行 ---
-np.random.seed(42)  # 固定種子，確保每次跑出來的 Random Pool 都一模一樣
-# ----------------
 import ctypes
 from pacman_env import PacmanEnv
 
