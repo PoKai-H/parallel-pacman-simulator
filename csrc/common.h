@@ -1,3 +1,4 @@
+#include <stdint.h>
 // csrc/common.h
 
 #ifndef COMMON_H
@@ -30,21 +31,30 @@ typedef struct {
 
 
 typedef struct {
-    int grid_h, grid_w;
-    const int *grid;
+    // --- Config / Static Info ---
+    int grid_h;
+    int grid_w;
     int n_agents;
-    AgentState *ghosts_in;
-    int *ghost_actions;
-    AgentState *ghosts_out;
+    const int *grid;          // 指向 Map 資料 (Input)
+    
+    // --- Input State (Read Only) ---
+    const AgentState *ghosts_in; // 指向 Ghost Array (Input)
+    const int *ghost_actions;    // 指向 Action Array (Input)
     int pacman_x_in;
     int pacman_y_in;
     int pacman_action;
     int pacman_speed;
-    int pacman_x_out;
+
+    // --- Output State (Write Only) ---
+    AgentState *ghosts_out;   // 指向 Ghost Output Buffer
+    int pacman_x_out;         // 直接存數值 (因為我們傳 EnvState 指標進去改)
     int pacman_y_out;
-    float *ghost_rewards;
-    float pacman_reward;
-    int done;
+    
+    // --- Rewards / Flags ---
+    float *ghost_rewards;     // 這裡建議維持指標 (因為是 Array)
+    float pacman_reward;      // Scalar 直接存數值
+    int done;                 // Scalar 直接存數值
+    
 } EnvState;
 
 
@@ -96,23 +106,7 @@ typedef struct {
 //       * all rewards = 0
 //       * done = 0
 //
-void step_env_apply_actions_sequential(
-    int grid_h, int grid_w,
-    const int *grid,              // [grid_h * grid_w]
-    int n_agents,
-    const AgentState *ghosts_in,  // [n_agents]
-    const int *ghost_actions,     // [n_agents], each in {0..4}
-    AgentState *ghosts_out,       // [n_agents]
-    int pacman_x_in,
-    int pacman_y_in,
-    int pacman_action,            // {0..4}
-    int pacman_speed,             // 0, 1, or 2 (max speed = 2 cells)
-    int *pacman_x_out,
-    int *pacman_y_out,
-    float *ghost_rewards,         // [n_agents]
-    float *pacman_reward,         // scalar
-    int *done                     // 1 if episode ends, else 0
-);
+void step_env_apply_actions_sequential(EnvState *env_state);
 
 
 // =========================
