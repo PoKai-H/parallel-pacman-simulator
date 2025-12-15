@@ -1,8 +1,10 @@
-// csrc/step_apply_sequential.c
 #include "common.h"
+#include <math.h>
+#include <stdlib.h>
+#include <string.h> // for memset
 
 // ==========================================
-// Helper Functions (Internal)
+// Helper Functions (Physics)
 // ==========================================
 
 static inline int grid_idx(int y, int x, int width) {
@@ -13,7 +15,6 @@ static inline int in_bounds(int y, int x, int h, int w) {
     return (y >= 0 && y < h && x >= 0 && x < w);
 }
 
-// 注意：這裡配合 common.h 改成了 const int8_t *grid
 static inline int is_wall(const int8_t *grid, int y, int x, int h, int w) {
     if (!in_bounds(y, x, h, w)) return 1; 
     return grid[grid_idx(y, x, w)] == 1;
@@ -31,101 +32,224 @@ static void action_to_delta(int action, int *dx, int *dy) {
 }
 
 // ==========================================
-// Main Kernel Implementation
+// Helper Functions (Math & RNG)
 // ==========================================
 
-void step_env_apply_actions_sequential(EnvState *s) {
-    // 1. Init rewards & done flag
-    // ------------------------------------------------
+// 從 Pool 拿亂數 (Thread-safe friendly logic)
+static inline float get_rand(const float *pool, int size, int *idx) {
+    float val = pool[*idx];
+    *idx = (*idx + 1) % size; // 循環使用
+    return val;
+}
+
+// Box-Muller Transform: 產生高斯分佈 N(mean, std)
+static float sample_normal(float mean, float std, const float *pool, int size, int *idx) {
+    float u1 = get_rand(pool, size, idx);
+    float u2 = get_rand(pool, size, idx);
+    
+    if(u1 < 1e-6f) u1 = 1e-6f; // 避免 log(0)
+    
+    float z0 = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * M_PI * u2);
+    return mean + z0 * std;
+}
+
+// 內部結構，用於 KNN 排序
+typedef struct {
+    int id;
+    float dx;
+    float dy;
+    float dist_sq;
+} NeighborCandidate;
+
+// ==========================================
+// Core Logic: 1. Physics (Movement)
+// ==========================================
+void apply_physics(EnvState *s) {
+    // A. Move Ghosts
     for (int i = 0; i < s->n_agents; i++) {
-        s->ghost_rewards[i] = 0.0f;
-    }
-    s->pacman_reward = 0.0f;
-    s->done = 0;
-
-    // 2. Setup Local Variables for Clean Access
-    // ------------------------------------------------
-    // Copy input pacman state locally to mutate during sub-steps
-    int pac_x = s->pacman_x_in;
-    int pac_y = s->pacman_y_in;
-    int pm_speed = s->pacman_speed;
-
-    // Safety clamp
-    if (pm_speed < 0) pm_speed = 0;
-    if (pm_speed > 2) pm_speed = 2;
-
-    // 3. Move Ghosts
-    // ------------------------------------------------
-    for (int i = 0; i < s->n_agents; i++) {
-        // Read from input buffer
         AgentState current = s->ghosts_in[i];
-
         if (!current.alive) {
-            s->ghosts_out[i] = current; // Direct copy if dead
+            s->ghosts_out[i] = current;
             continue;
         }
 
         int dx = 0, dy = 0;
         action_to_delta(s->ghost_actions[i], &dx, &dy);
-
         int nx = current.x + dx;
         int ny = current.y + dy;
 
-        // Use 's->' to access grid dimensions and data
         if (is_wall(s->grid, ny, nx, s->grid_h, s->grid_w)) {
-            // Hit wall: stay put
             s->ghosts_out[i].x = current.x;
             s->ghosts_out[i].y = current.y;
         } else {
-            // Move
             s->ghosts_out[i].x = nx;
             s->ghosts_out[i].y = ny;
         }
         s->ghosts_out[i].alive = current.alive;
     }
 
-    // 4. Move Pacman (Sub-steps)
-    // ------------------------------------------------
-    {
-        int dx = 0, dy = 0;
-        action_to_delta(s->pacman_action, &dx, &dy);
+    // B. Move Pacman (Sub-steps)
+    int px = s->pacman_x_in;
+    int py = s->pacman_y_in;
+    int pdx = 0, pdy = 0;
+    action_to_delta(s->pacman_action, &pdx, &pdy);
+    
+    int speed = s->pacman_speed;
+    if (speed < 0) speed = 0; 
+    if (speed > 2) speed = 2;
 
-        for (int step = 0; step < pm_speed; step++) {
-            int nx = pac_x + dx;
-            int ny = pac_y + dy;
-
-            if (is_wall(s->grid, ny, nx, s->grid_h, s->grid_w)) {
-                break; // Stop at wall
-            }
-            pac_x = nx;
-            pac_y = ny;
-        }
+    for (int step = 0; step < speed; step++) {
+        int nx = px + pdx;
+        int ny = py + pdy;
+        if (is_wall(s->grid, ny, nx, s->grid_h, s->grid_w)) break;
+        px = nx;
+        py = ny;
     }
 
-    // 5. Detect Capture
-    // ------------------------------------------------
+    // C. Detect Capture & Rewards
     int captured = 0;
     for (int i = 0; i < s->n_agents; i++) {
-        // Check against NEW ghost positions
-        if (!s->ghosts_out[i].alive) continue;
-        
-        if (s->ghosts_out[i].x == pac_x && s->ghosts_out[i].y == pac_y) {
-            captured = 1;
-            break; 
+        s->ghost_rewards[i] = -0.01f; // Time penalty
+        if (s->ghosts_out[i].alive) {
+            if (s->ghosts_out[i].x == px && s->ghosts_out[i].y == py) {
+                captured = 1;
+            }
         }
     }
 
-    // 6. Finalize Outputs
-    // ------------------------------------------------
     if (captured) {
-        for (int i = 0; i < s->n_agents; i++) {
-            s->ghost_rewards[i] = 1.0f;
-        }
-        s->pacman_reward = -1.0f;
+        for (int i = 0; i < s->n_agents; i++) s->ghost_rewards[i] += 1.0f;
+        s->pacman_reward = -10.0f;
         s->done = 1;
+    } else {
+        s->pacman_reward = 1.0f; // Survival reward
+        s->done = 0;
     }
 
-    // Write back Pacman final position to the struct
-    s->pacman_x_out = pac_x;
-    s->pacman_y_out = pac_y;
+    s->pacman_x_out = px;
+    s->pacman_y_out = py;
+}
+
+// ==========================================
+// Core Logic: 2. Sensing (Observation)
+// ==========================================
+// 這是 Level 1 OpenMP 平行化的主要加速對象
+void compute_observations(EnvState *s) {
+    float gw = (float)s->grid_w;
+    float gh = (float)s->grid_h;
+
+    // 對每個 Ghost 進行計算 (Embarrassingly Parallel)
+    for (int i = 0; i < s->n_agents; i++) {
+        
+        // --- 1. 定位寫入位置 ---
+        float *my_obs = &s->obs_out[i * OBS_DIM];
+        AgentState me = s->ghosts_out[i];
+
+        if (!me.alive) {
+            for(int k=0; k<OBS_DIM; k++) my_obs[k] = 0.0f;
+            continue;
+        }
+
+        // --- 2. Self Info (2 floats) ---
+        my_obs[0] = (float)me.x / gw;
+        my_obs[1] = (float)me.y / gh;
+
+        // --- 3. Noisy Pacman Sensing (3 floats) ---
+        // Proposal Logic: v_obs = v_true + noise, c = exp(-alpha * d)
+        float px = (float)s->pacman_x_out;
+        float py = (float)s->pacman_y_out;
+        float dx = px - me.x;
+        float dy = py - me.y;
+        float dist = sqrtf(dx*dx + dy*dy);
+
+        if (dist <= 3.0f) { // Sensing radius
+            // Confidence decay
+            float alpha = 0.5f;
+            float conf = expf(-alpha * dist);
+
+            // Add Noise
+            float sigma = 0.1f * dist; 
+            float nx = sample_normal(0.0f, sigma, s->rand_pool, s->rand_pool_size, s->rand_idx);
+            float ny = sample_normal(0.0f, sigma, s->rand_pool, s->rand_pool_size, s->rand_idx);
+            
+            // Normalize direction
+            float raw_vx = dx + nx;
+            float raw_vy = dy + ny;
+            float mag = sqrtf(raw_vx*raw_vx + raw_vy*raw_vy);
+            
+            if (mag > 1e-6f) {
+                my_obs[2] = raw_vx / mag;
+                my_obs[3] = raw_vy / mag;
+            } else {
+                my_obs[2] = 0.0f;
+                my_obs[3] = 0.0f;
+            }
+            my_obs[4] = conf;
+        } else {
+            // Out of range
+            my_obs[2] = 0.0f; my_obs[3] = 0.0f; my_obs[4] = 0.0f;
+        }
+
+        // --- 4. Neighbor Sensing (KNN = 4) (12 floats) ---
+        // 這是最重的迴圈 O(N)
+        NeighborCandidate candidates[16]; 
+        int count = 0;
+
+        // A. Scan
+        for (int j = 0; j < s->n_agents; j++) {
+            if (i == j) continue;
+            if (!s->ghosts_out[j].alive) continue;
+
+            float rdx = (float)(s->ghosts_out[j].x - me.x);
+            float rdy = (float)(s->ghosts_out[j].y - me.y);
+            float d2 = rdx*rdx + rdy*rdy;
+
+            // Communication/Sensing Radius = 3.0 (sq = 9.0)
+            if (d2 <= 9.0f) {
+                candidates[count].id = j;
+                candidates[count].dx = rdx / gw; // Normalize relative pos
+                candidates[count].dy = rdy / gh;
+                candidates[count].dist_sq = d2;
+                count++;
+            }
+        }
+
+        // B. Sort (Insertion Sort for small N)
+        for (int p = 1; p < count; p++) {
+            NeighborCandidate key = candidates[p];
+            int q = p - 1;
+            while (q >= 0 && candidates[q].dist_sq > key.dist_sq) {
+                candidates[q + 1] = candidates[q];
+                q--;
+            }
+            candidates[q + 1] = key;
+        }
+
+        // C. Fill & Pad
+        int offset = 5; // Self(2) + Pac(3)
+        for (int k = 0; k < MAX_NEIGHBORS; k++) {
+            if (k < count) {
+                my_obs[offset + k*3 + 0] = candidates[k].dx;
+                my_obs[offset + k*3 + 1] = candidates[k].dy;
+                my_obs[offset + k*3 + 2] = sqrtf(candidates[k].dist_sq) / gw; // Normalize dist
+            } else {
+                // Zero Padding
+                my_obs[offset + k*3 + 0] = 0.0f;
+                my_obs[offset + k*3 + 1] = 0.0f;
+                my_obs[offset + k*3 + 2] = 0.0f;
+            }
+        }
+    }
+}
+
+// ==========================================
+// Main Entry Point
+// ==========================================
+void step_env_apply_actions_sequential(EnvState *s) {
+    // 1. Physics (移動與碰撞)
+    apply_physics(s);
+
+    // 2. Sensing (產生 Observation)
+    // 這一部分在 Level 1 會被 OpenMP 平行化
+    compute_observations(s);
 }

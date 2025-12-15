@@ -14,23 +14,7 @@
 #include <omp.h>   // needed for OpenMP (later)
 
 // Forward declaration of the sequential baseline
-void step_env_apply_actions_sequential(
-    int grid_h, int grid_w,
-    const int *grid,
-    int n_agents,
-    const AgentState *ghosts_in,
-    const int *ghost_actions,
-    AgentState *ghosts_out,
-    int pacman_x_in,
-    int pacman_y_in,
-    int pacman_action,
-    int pacman_speed,
-    int *pacman_x_out,
-    int *pacman_y_out,
-    float *ghost_rewards,
-    float *pacman_reward,
-    int *done
-);
+void step_env_apply_actions_sequential(EnvState *env_state);
 
 /**
  * Level-1 agent-parallel version of the environment step.
@@ -43,39 +27,11 @@ void step_env_apply_actions_sequential(
  *   4. Run the correctness tests against the sequential baseline.
  */
 void step_env_apply_actions_level1(
-    int grid_h, int grid_w,
-    const int *grid,
-    int n_agents,
-    const AgentState *ghosts_in,
-    const int *ghost_actions,
-    AgentState *ghosts_out,
-    int pacman_x_in,
-    int pacman_y_in,
-    int pacman_action,
-    int pacman_speed,
-    int *pacman_x_out,
-    int *pacman_y_out,
-    float *ghost_rewards,
-    float *pacman_reward,
-    int *done
+    EnvState *env_state
 ) {
     // For now, just call the sequential reference.
     // This guarantees that everything compiles and runs.
     step_env_apply_actions_sequential(
-        grid_h, grid_w,
-        grid,
-        n_agents,
-        ghosts_in,
-        ghost_actions,
-        ghosts_out,
-        pacman_x_in,
-        pacman_y_in,
-        pacman_action,
-        pacman_speed,
-        pacman_x_out,
-        pacman_y_out,
-        ghost_rewards,
-        pacman_reward,
-        done
+        env_state
     );
 }

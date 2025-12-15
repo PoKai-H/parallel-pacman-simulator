@@ -8,107 +8,80 @@
 extern "C" {
 #endif
 
-// =========================
-// Grid encoding
-// =========================
-// grid[y * grid_w + x] =
-//   0 : empty cell
-//   1 : wall (impassable)
-//   2 : pellet (reserved for future use; not consumed in the minimal version)
+// ==========================================
+// Constants & Configuration
+// ==========================================
+// KNN 策略: 每個 Agent 只觀察最近的 4 個鄰居
+#define MAX_NEIGHBORS 4
 
+// Observation Vector Dimension:
+// [0,1]: Self (x, y) normalized
+// [2,3,4]: Pacman (rel_x, rel_y, confidence)
+// [5-16]: 4 Neighbors * 3 features (rel_x, rel_y, dist)
+// Total = 2 + 3 + 12 = 17
+#define OBS_DIM 17
 
-// =========================
-// Agent state
-// =========================
-// Used for ghosts (and can be reused for other agents in future).
-// We intentionally keep this as a simple POD struct (no pointers) so that
-// it is friendly to OpenMP, MPI and Python ctypes.
+// ==========================================
+// Structures
+// ==========================================
+
+// Agent State (Plain Old Data)
 typedef struct {
     int x;
     int y;
-    int alive;  // conditional mask for thread-safe operations
-} AgentState;  
+    int alive; 
+} AgentState;
 
 
+// 核心環境狀態 Context
+// 所有 Level 1/2/3 的函式都只傳遞這個 Struct 的指標
 typedef struct {
-    // --- Config / Static Info ---
+    // --- Config (Read Only) ---
     int grid_h;
     int grid_w;
     int n_agents;
-    const int *grid;          // 指向 Map 資料 (Input)
-    
+    const int8_t *grid; // 優化: 使用 int8 節省頻寬
+
     // --- Input State (Read Only) ---
-    const AgentState *ghosts_in; // 指向 Ghost Array (Input)
-    const int *ghost_actions;    // 指向 Action Array (Input)
+    const AgentState *ghosts_in;  // [n_agents]
+    const int *ghost_actions;     // [n_agents]
+    
     int pacman_x_in;
     int pacman_y_in;
     int pacman_action;
-    int pacman_speed;
+    int pacman_speed;             // 0, 1, or 2
+
+    // --- Random Number Generation (Input) ---
+    // 從 Python 傳入預先生成的亂數池，解決 C 語言 rand() 不安全的問題
+    const float *rand_pool; 
+    int rand_pool_size;
+    int *rand_idx;                // Pointer to scalar (update across steps)
 
     // --- Output State (Write Only) ---
-    AgentState *ghosts_out;   // 指向 Ghost Output Buffer
-    int pacman_x_out;         // 直接存數值 (因為我們傳 EnvState 指標進去改)
+    AgentState *ghosts_out;       // [n_agents]
+    
+    // C 直接修改這些數值，不用 return
+    int pacman_x_out;
     int pacman_y_out;
     
-    // --- Rewards / Flags ---
-    float *ghost_rewards;     // 這裡建議維持指標 (因為是 Array)
-    float pacman_reward;      // Scalar 直接存數值
-    int done;                 // Scalar 直接存數值
-    
+    float *ghost_rewards;         // [n_agents]
+    float pacman_reward;
+    int done;
+
+    // --- Observation Output (New!) ---
+    // 每個 Agent 寫入屬於自己的一段記憶體 (長度 OBS_DIM)
+    // Total Size: n_agents * OBS_DIM
+    float *obs_out;
+
 } EnvState;
 
+// ==========================================
+// Function Prototypes
+// ==========================================
 
-// =========================
-// Core environment kernel (sequential baseline)
-// =========================
-//
-// Python chooses all actions and the pacman speed.
-// This function only applies the actions, updates positions,
-// checks walls, detects capture, computes rewards, and sets "done".
-//
-// Actions (for both ghosts and Pacman):
-//   0 = stay
-//   1 = move up    (y - 1)
-//   2 = move down  (y + 1)
-//   3 = move left  (x - 1)
-//   4 = move right (x + 1)
-//
-// Speeds:
-//   - Ghosts: implicitly move with speed = 1 (one grid cell per step).
-//   - Pacman: moves with speed = pacman_speed (0, 1, or 2 cells per step).
-//             The kernel will internally perform "pacman_speed" sub-steps,
-//             each time moving one cell in the chosen direction, stopping
-//             early if a wall is encountered.
-//
-// Parameters:
-//   grid_h, grid_w : dimensions of the grid.
-//   grid           : pointer to flattened grid array [grid_h * grid_w].
-//   n_agents       : number of ghosts.
-//   ghosts_in      : input ghost states at the beginning of the step.
-//   ghost_actions  : array of size [n_agents], each in {0..4}.
-//   ghosts_out     : output ghost states after the step.
-//   pacman_x_in,
-//   pacman_y_in    : Pacman's position at the beginning of the step.
-//   pacman_action  : Pacman's action in {0..4}.
-//   pacman_speed   : Pacman's speed (0, 1, or 2).
-//   pacman_x_out,
-//   pacman_y_out   : Pacman's position after the step.
-//   ghost_rewards  : output rewards for each ghost [n_agents].
-//   pacman_reward  : output reward for Pacman (scalar).
-//   done           : set to 1 if the episode ends in this step, else 0.
-//
-// Minimal version reward / termination rule:
-//   - If any ghost occupies the same cell as Pacman after movement:
-//       * all ghosts get +1
-//       * Pacman gets -1
-//       * done = 1
-//   - Otherwise:
-//       * all rewards = 0
-//       * done = 0
-//
 void step_env_apply_actions_sequential(EnvState *env_state);
 
-
+void step_env_apply_actions_batch(EnvState *states, int n_envs);
 // =========================
 // Notes for parallel versions
 // =========================
