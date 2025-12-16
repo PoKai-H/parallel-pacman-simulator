@@ -76,9 +76,10 @@ lib.step_env_apply_actions_sequential.restype = None
 # 定義常數，對應 common.h
 MAX_NEIGHBORS = 4
 OBS_DIM = 2 + 3 + (MAX_NEIGHBORS * 3) # 17
+OBS_DIM_ALIGNED = 32
 
 class PacmanEnv:
-    def __init__(self, grid: np.ndarray, n_agents: int = 14, max_steps: int = 200):
+    def __init__(self, grid: np.ndarray, n_agents: int = 16, max_steps: int = 200):
         assert grid.ndim == 2, "grid must be 2D"
         
         # Grid Optimization (int8)
@@ -107,7 +108,7 @@ class PacmanEnv:
 
         # [NEW] Observation Buffer
         # 每個 Agent 17 個 float
-        self.obs_buffer = np.zeros(n_agents * OBS_DIM, dtype=np.float32)
+        self.obs_buffer = np.zeros(n_agents * OBS_DIM_ALIGNED, dtype=np.float32)
         self.obs_buffer_ptr = self.obs_buffer.ctypes.data_as(C.POINTER(C.c_float))
 
         # --- Initialize Shared C Struct ---
@@ -154,19 +155,23 @@ class PacmanEnv:
 
     def _get_obs(self):
         """
-        Construct observation dictionary.
-        Returns C-computed observations reshaped for Python usage.
+        關鍵修改：
+        1. Reshape 成 (N, 32) 包含 padding
+        2. Slice 取前 17 個有效值
         """
-        # 1. 取得 C 算好的 Observation Vector (Zero-copy)
-        # obs_buffer 是 1D array, 這裡把它 reshape 成 (N, 17)
-        # 這樣 Agent i 的 observation 就是 matrix[i]
-        ghost_obs_tensor = self.obs_buffer.reshape((self.n_agents, OBS_DIM)).copy()
+        # Step 1: 把 1D buffer 轉成 (N, 32)
+        raw_tensor = self.obs_buffer.reshape((self.n_agents, OBS_DIM_ALIGNED))
+        
+        # Step 2: [關鍵] 切片！只取前 17 個欄位
+        # [:, :17] 意思是：取所有 Agents，但只取 Feature 0 到 16
+        # .copy() 很重要，確保回傳的是乾淨的記憶體區塊
+        ghost_obs_tensor = raw_tensor[:, :OBS_DIM].copy()
 
-        # 2. Pacman 位置 (給 Render 用，或者如果是全域觀測需要用到)
+        # Step 3: Pacman 位置
         pac_pos = np.array([self.pac_x, self.pac_y], dtype=np.int32)
         
         return {
-            "ghost_tensor": ghost_obs_tensor, # (N, 17)
+            "ghost_tensor": ghost_obs_tensor, # 這裡回傳的會是 (N, 17)
             "pacman": pac_pos
         }
 

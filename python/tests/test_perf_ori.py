@@ -12,14 +12,14 @@ from pacman_env import PacmanEnv
 
 def run_benchmark(steps=10000):
     print(f"=== Running Benchmark ({steps} steps) ===")
-    N_AGENTS = 512
+    
     # 初始化
-    grid = np.zeros((80, 80), dtype=np.int32)
-    env = PacmanEnv(grid, n_agents=N_AGENTS) # 16 隻鬼
+    grid = np.zeros((40, 40), dtype=np.int32)
+    env = PacmanEnv(grid, n_agents=16) # 16 隻鬼
     env.reset()
     
     # 預先生成 Actions (避免 Python 迴圈內生成拖慢速度)
-    actions = np.random.randint(0, 5, size=(steps, N_AGENTS), dtype=np.int32)
+    actions = np.random.randint(0, 5, size=(steps, 16), dtype=np.int32)
     
     start_time = time.time()
     

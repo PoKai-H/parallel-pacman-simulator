@@ -20,7 +20,7 @@ extern "C" {
 // [5-16]: 4 Neighbors * 3 features (rel_x, rel_y, dist)
 // Total = 2 + 3 + 12 = 17
 #define OBS_DIM 17
-
+#define OBS_DIM_ALIGNED 32 // for Cache Alignment
 // ==========================================
 // Structures
 // ==========================================

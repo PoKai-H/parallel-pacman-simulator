@@ -2,6 +2,10 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h> // for memset
+#include <omp.h> // 1. 引入 OpenMP 頭文件
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 // ==========================================
 // Helper Functions (Physics)
@@ -131,48 +135,46 @@ void apply_physics(EnvState *s) {
 }
 
 // ==========================================
-// Core Logic: 2. Sensing (Observation)
+// Core Logic: 2. Sensing (Parallelized)
 // ==========================================
-// 這是 Level 1 OpenMP 平行化的主要加速對象
 void compute_observations(EnvState *s) {
     float gw = (float)s->grid_w;
     float gh = (float)s->grid_h;
 
-    // 對每個 Ghost 進行計算 (Embarrassingly Parallel)
+    // 1. OpenMP 平行化 (注意 schedule 用 static 對齊 N=16)
+    #pragma omp parallel for default(none) shared(s, gw, gh) schedule(static)
     for (int i = 0; i < s->n_agents; i++) {
         
-        // --- 1. 定位寫入位置 ---
-        float *my_obs = &s->obs_out[i * OBS_DIM];
+        // 2. 宣告在迴圈內 (Private) & 加上 * 取值
+        int local_rand_idx = (*s->rand_idx + i * 131) % s->rand_pool_size;
+        int *p_rand_idx = &local_rand_idx; // 指向區域變數
+
+        float *my_obs = &s->obs_out[i * OBS_DIM_ALIGNED];
         AgentState me = s->ghosts_out[i];
 
         if (!me.alive) {
-            for(int k=0; k<OBS_DIM; k++) my_obs[k] = 0.0f;
+            memset(my_obs, 0, OBS_DIM_ALIGNED * sizeof(float));
             continue;
         }
 
-        // --- 2. Self Info (2 floats) ---
         my_obs[0] = (float)me.x / gw;
         my_obs[1] = (float)me.y / gh;
 
-        // --- 3. Noisy Pacman Sensing (3 floats) ---
-        // Proposal Logic: v_obs = v_true + noise, c = exp(-alpha * d)
         float px = (float)s->pacman_x_out;
         float py = (float)s->pacman_y_out;
         float dx = px - me.x;
         float dy = py - me.y;
         float dist = sqrtf(dx*dx + dy*dy);
 
-        if (dist <= 3.0f) { // Sensing radius
-            // Confidence decay
+        if (dist <= 3.0f) { 
             float alpha = 0.5f;
             float conf = expf(-alpha * dist);
-
-            // Add Noise
             float sigma = 0.1f * dist; 
-            float nx = sample_normal(0.0f, sigma, s->rand_pool, s->rand_pool_size, s->rand_idx);
-            float ny = sample_normal(0.0f, sigma, s->rand_pool, s->rand_pool_size, s->rand_idx);
             
-            // Normalize direction
+            // 3. 關鍵檢查點：這裡一定要傳 p_rand_idx，絕對不能傳 s->rand_idx
+            float nx = sample_normal(0.0f, sigma, s->rand_pool, s->rand_pool_size, p_rand_idx);
+            float ny = sample_normal(0.0f, sigma, s->rand_pool, s->rand_pool_size, p_rand_idx);
+            
             float raw_vx = dx + nx;
             float raw_vy = dy + ny;
             float mag = sqrtf(raw_vx*raw_vx + raw_vy*raw_vy);
@@ -186,16 +188,14 @@ void compute_observations(EnvState *s) {
             }
             my_obs[4] = conf;
         } else {
-            // Out of range
             my_obs[2] = 0.0f; my_obs[3] = 0.0f; my_obs[4] = 0.0f;
         }
 
-        // --- 4. Neighbor Sensing (KNN = 4) (12 floats) ---
-        // 這是最重的迴圈 O(N)
+        // --- Neighbor Sensing (KNN) ---
+        // 注意：candidates 也要宣告在迴圈內
         NeighborCandidate candidates[16]; 
         int count = 0;
 
-        // A. Scan
         for (int j = 0; j < s->n_agents; j++) {
             if (i == j) continue;
             if (!s->ghosts_out[j].alive) continue;
@@ -204,17 +204,16 @@ void compute_observations(EnvState *s) {
             float rdy = (float)(s->ghosts_out[j].y - me.y);
             float d2 = rdx*rdx + rdy*rdy;
 
-            // Communication/Sensing Radius = 3.0 (sq = 9.0)
             if (d2 <= 9.0f) {
                 candidates[count].id = j;
-                candidates[count].dx = rdx / gw; // Normalize relative pos
+                candidates[count].dx = rdx / gw;
                 candidates[count].dy = rdy / gh;
                 candidates[count].dist_sq = d2;
                 count++;
+                if (count >= 16) break;
             }
         }
 
-        // B. Sort (Insertion Sort for small N)
         for (int p = 1; p < count; p++) {
             NeighborCandidate key = candidates[p];
             int q = p - 1;
@@ -225,21 +224,22 @@ void compute_observations(EnvState *s) {
             candidates[q + 1] = key;
         }
 
-        // C. Fill & Pad
-        int offset = 5; // Self(2) + Pac(3)
+        int offset = 5; 
         for (int k = 0; k < MAX_NEIGHBORS; k++) {
             if (k < count) {
                 my_obs[offset + k*3 + 0] = candidates[k].dx;
                 my_obs[offset + k*3 + 1] = candidates[k].dy;
-                my_obs[offset + k*3 + 2] = sqrtf(candidates[k].dist_sq) / gw; // Normalize dist
+                my_obs[offset + k*3 + 2] = sqrtf(candidates[k].dist_sq) / gw;
             } else {
-                // Zero Padding
                 my_obs[offset + k*3 + 0] = 0.0f;
                 my_obs[offset + k*3 + 1] = 0.0f;
                 my_obs[offset + k*3 + 2] = 0.0f;
             }
         }
-    }
+    } 
+
+    // 4. 更新全域亂數 (for next step)
+    *s->rand_idx = (*s->rand_idx + s->n_agents * 7) % s->rand_pool_size;
 }
 
 // ==========================================
