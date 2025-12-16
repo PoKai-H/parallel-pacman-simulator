@@ -149,11 +149,11 @@ void compute_observations(EnvState *s) {
         int local_rand_idx = (*s->rand_idx + i * 131) % s->rand_pool_size;
         int *p_rand_idx = &local_rand_idx; // 指向區域變數
 
-        float *my_obs = &s->obs_out[i * OBS_DIM];
+        float *my_obs = &s->obs_out[i * OBS_DIM_ALIGNED];
         AgentState me = s->ghosts_out[i];
 
         if (!me.alive) {
-            memset(my_obs, 0, OBS_DIM * sizeof(float));
+            memset(my_obs, 0, OBS_DIM_ALIGNED * sizeof(float));
             continue;
         }
 
