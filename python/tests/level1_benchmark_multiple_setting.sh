@@ -22,7 +22,7 @@ for G in "${GRID_SIZES[@]}"; do
     for A in "${AGENTS_LIST[@]}"; do
         
         # 定義輸出的檔案名稱，讓檔名包含參數資訊
-        OUT_FILE="result_G${G}_A${A}.txt"
+        OUT_FILE="./resutls/result_G${G}_A${A}.txt"
         
         # 清空或是建立新檔案，並寫入檔頭
         echo "Running Benchmark for Grid=${G}x${G}, Agents=${A}" > "$OUT_FILE"
