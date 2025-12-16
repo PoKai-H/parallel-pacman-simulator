@@ -5,8 +5,8 @@ import numpy as np
 
 # 路徑設定
 current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+sys.path.append(project_root)
 
 from pacman_env import PacmanEnv
 

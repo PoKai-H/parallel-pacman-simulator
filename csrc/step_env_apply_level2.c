@@ -37,16 +37,21 @@ void step_env_apply_actions_batch(EnvState *states, int n_envs) {
     #pragma omp parallel for default(none) shared(states, n_envs) schedule(static)
     // 當你開始實作時，請註解掉下面這行，並寫入你的 OpenMP 迴圈
     for (int i = 0; i < n_envs; i++) {
-        // 每個 iteration i 對應「第 i 個環境」的單步更新
-        // 只會讀/寫 states[i] 內部的欄位
-        // [MOD-2] 每個 thread 只處理自己的 states[i]，避免互相寫到同一份資料
+        
+        // Debug: 只印出前兩個環境的指標狀態
+        // if (i < 2) {
+        //     printf("--- Debug Env %d ---\n", i);
+        //     printf("Base Addr: %p\n", (void*)&states[i]);
+        //     printf("grid: %p\n", (void*)states[i].grid);
+        //     printf("ghosts_in: %p\n", (void*)states[i].ghosts_in);
+        //     printf("ghost_actions: %p\n", (void*)states[i].ghost_actions);
+        //     printf("rand_pool: %p\n", (void*)states[i].rand_pool);
+        //     printf("obs_out: %p\n", (void*)states[i].obs_out);
+        //     fflush(stdout); // 強制輸出
+        // }
+        
         step_env_apply_actions_sequential(&states[i]);
     }
-    // 提示: 你的實作應該長這樣:
-    // #pragma omp parallel for ...
-    // for (int i = 0; i < n_envs; i++) {
-    //     step_env_apply_actions_sequential(&states[i]);
-    // }
 }
 
     // #pragma omp parallel for：OpenMP 建立一個 thread team，
@@ -63,3 +68,7 @@ void step_env_apply_actions_batch(EnvState *states, int n_envs) {
     //   - 用「靜態分配」的方式分工：一開始就把 i 的範圍切好分給 threads
     //   - overhead 最低，通常適合「每個 env step 工作量差不多」的情況
     //   - 若 env 的工作量差很大才考慮 dynamic/guided
+// csrc/step_env_apply_level2.c 最下方加入
+int get_c_struct_size() {
+    return sizeof(EnvState);
+}

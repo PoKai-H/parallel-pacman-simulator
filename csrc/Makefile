@@ -63,3 +63,6 @@ $(TARGET): $(OBJ)
 
 clean:
 	rm -f $(OBJ) $(TARGET)
+
+bench: benchmark.c step_env_apply_level2.c step_apply_sequential.c
+	$(CC) $(CFLAGS) -o benchmark benchmark.c step_env_apply_level2.c step_apply_sequential.c $(LDLIBS)

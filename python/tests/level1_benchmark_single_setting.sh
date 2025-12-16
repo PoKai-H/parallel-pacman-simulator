@@ -4,7 +4,7 @@
 set -e
 
 # 定義測試腳本的路徑 (假設你在 python/ 目錄下執行此 sh)
-TEST_SCRIPT="./level/speedup/test_level1_largeScaleLargeStep.py"
+TEST_SCRIPT="level1/speedup/test_level1_largeScaleLargeStep.py"
 
 echo "========================================"
 echo "Starting Performance Benchmark"
