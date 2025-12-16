@@ -72,7 +72,7 @@ typedef struct {
     // 每個 Agent 寫入屬於自己的一段記憶體 (長度 OBS_DIM)
     // Total Size: n_agents * OBS_DIM
     float *obs_out;
-
+    char _padding[128];
 } EnvState;
 
 // ==========================================
