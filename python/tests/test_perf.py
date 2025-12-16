@@ -10,11 +10,11 @@ sys.path.append(parent_dir)
 
 from pacman_env import PacmanEnv
 
-def run_benchmark(steps=100):
+def run_benchmark(steps=10000):
     print(f"=== Running Benchmark ({steps} steps) ===")
-    N_AGENTS = 50000
+    N_AGENTS = 512
     # 初始化
-    grid = np.zeros((500, 500), dtype=np.int32)
+    grid = np.zeros((80, 80), dtype=np.int32)
     env = PacmanEnv(grid, n_agents=N_AGENTS) # 16 隻鬼
     env.reset()
     
