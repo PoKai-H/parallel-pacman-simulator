@@ -1,0 +1,28 @@
+Running Benchmark for Grid=100x100, Agents=512
+Date: Mon Dec 15 06:47:07 PM CST 2025
+-------------------------------------------
+
+>>> [OMP_NUM_THREADS=1] <<<
+=== Config: Grid=100x100, Agents=512, Steps=10000 ===
+Total Time: 29.5988 sec
+Throughput: 337.85 Steps/Sec
+
+>>> [OMP_NUM_THREADS=2] <<<
+=== Config: Grid=100x100, Agents=512, Steps=10000 ===
+Total Time: 15.4463 sec
+Throughput: 647.40 Steps/Sec
+
+>>> [OMP_NUM_THREADS=4] <<<
+=== Config: Grid=100x100, Agents=512, Steps=10000 ===
+Total Time: 8.4321 sec
+Throughput: 1185.95 Steps/Sec
+
+>>> [OMP_NUM_THREADS=8] <<<
+=== Config: Grid=100x100, Agents=512, Steps=10000 ===
+Total Time: 4.8742 sec
+Throughput: 2051.60 Steps/Sec
+
+>>> [OMP_NUM_THREADS=16] <<<
+=== Config: Grid=100x100, Agents=512, Steps=10000 ===
+Total Time: 3.1550 sec
+Throughput: 3169.52 Steps/Sec
