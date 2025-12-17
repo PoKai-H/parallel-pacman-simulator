@@ -1,0 +1,18 @@
+==========================================================
+🔥 64-Core Hybrid Parallelism Experiment
+==========================================================
+
+🧪 Scenario A: Massive Batch (N_ENVS=64)
+   Goal: 證明當任務夠多時，Level 2 (Env Parallelism) 效率最高
+----------------------------------------------------------
+1. Strategy [64, 1] (Pure Level 2): Final Result - Throughput: 225.84 env_steps/s
+2. Strategy [16, 4] (Hybrid Mode ): Final Result - Throughput: 267.85 env_steps/s
+3. Strategy [ 1,64] (Pure Level 1): Final Result - Throughput: 36.20 env_steps/s
+
+🧪 Scenario B: Small Batch / Latency Critical (N_ENVS=4)
+   Goal: 證明當環境少於核心數時，需要 Level 1 補位來吃滿算力
+----------------------------------------------------------
+1. Strategy [64, 1] (Pure Level 2): Final Result - Throughput: 35.13 env_steps/s
+2. Strategy [ 4,16] (Hybrid Mode ): Final Result - Throughput: 68.52 env_steps/s
+3. Strategy [ 1,64] (Pure Level 1): Final Result - Throughput: 29.04 env_steps/s
+==========================================================

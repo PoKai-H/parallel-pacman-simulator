@@ -1,0 +1,35 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-7.4.4, pluggy-1.4.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/huan3263/final_project/parallel-pacman-simulator/python/tests
+collecting ... collected 27 items
+
+test_mechanics.py::test_init_basic PASSED                                [  3%]
+test_mechanics.py::test_obs_shape_consistency PASSED                     [  7%]
+test_mechanics.py::test_action_space_bounds PASSED                       [ 11%]
+test_mechanics.py::test_reward_structure PASSED                          [ 14%]
+test_mechanics.py::test_reset_mechanism PASSED                           [ 18%]
+test_mechanics.py::test_wall_collision PASSED                            [ 22%]
+test_mechanics.py::test_pacman_capture PASSED                            [ 25%]
+test_mechanics.py::test_scalability_stress[1-10] PASSED                  [ 29%]
+test_mechanics.py::test_scalability_stress[1-50] PASSED                  [ 33%]
+test_mechanics.py::test_scalability_stress[1-100] PASSED                 [ 37%]
+test_mechanics.py::test_scalability_stress[1-200] PASSED                 [ 40%]
+test_mechanics.py::test_scalability_stress[16-10] PASSED                 [ 44%]
+test_mechanics.py::test_scalability_stress[16-50] PASSED                 [ 48%]
+test_mechanics.py::test_scalability_stress[16-100] PASSED                [ 51%]
+test_mechanics.py::test_scalability_stress[16-200] PASSED                [ 55%]
+test_mechanics.py::test_scalability_stress[128-10] PASSED                [ 59%]
+test_mechanics.py::test_scalability_stress[128-50] PASSED                [ 62%]
+test_mechanics.py::test_scalability_stress[128-100] PASSED               [ 66%]
+test_mechanics.py::test_scalability_stress[128-200] PASSED               [ 70%]
+test_mechanics.py::test_scalability_stress[1024-10] PASSED               [ 74%]
+test_mechanics.py::test_scalability_stress[1024-50] PASSED               [ 77%]
+test_mechanics.py::test_scalability_stress[1024-100] PASSED              [ 81%]
+test_mechanics.py::test_scalability_stress[1024-200] PASSED              [ 85%]
+test_mechanics.py::test_scalability_stress[4096-10] PASSED               [ 88%]
+test_mechanics.py::test_scalability_stress[4096-50] PASSED               [ 92%]
+test_mechanics.py::test_scalability_stress[4096-100] PASSED              [ 96%]
+test_mechanics.py::test_scalability_stress[4096-200] PASSED              [100%]
+
+============================== 27 passed in 2.58s ==============================
