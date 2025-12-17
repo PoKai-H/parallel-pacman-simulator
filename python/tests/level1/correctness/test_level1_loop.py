@@ -2,10 +2,10 @@ import sys
 import os
 import numpy as np
 
-# 設定路徑以便 import pacman_env
 current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+# 往上跳三層: speedup -> level1 -> tests -> python
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+sys.path.append(project_root)
 
 from pacman_env import PacmanEnv
 
