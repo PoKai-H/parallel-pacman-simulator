@@ -11,7 +11,6 @@ extern "C" {
 // ==========================================
 // Constants & Configuration
 // ==========================================
-// KNN 策略: 每個 Agent 只觀察最近的 4 個鄰居
 #define MAX_NEIGHBORS 4
 
 // Observation Vector Dimension:
@@ -33,14 +32,13 @@ typedef struct {
 } AgentState;
 
 
-// 核心環境狀態 Context
-// 所有 Level 1/2/3 的函式都只傳遞這個 Struct 的指標
+
 typedef struct {
     // --- Config (Read Only) ---
     int grid_h;
     int grid_w;
     int n_agents;
-    const int8_t *grid; // 優化: 使用 int8 節省頻寬
+    const int8_t *grid; 
 
     // --- Input State (Read Only) ---
     const AgentState *ghosts_in;  // [n_agents]
@@ -52,7 +50,7 @@ typedef struct {
     int pacman_speed;             // 0, 1, or 2
 
     // --- Random Number Generation (Input) ---
-    // 從 Python 傳入預先生成的亂數池，解決 C 語言 rand() 不安全的問題
+    // using random generated from python to secure thread safety
     const float *rand_pool; 
     int rand_pool_size;
     int *rand_idx;                // Pointer to scalar (update across steps)
@@ -60,7 +58,6 @@ typedef struct {
     // --- Output State (Write Only) ---
     AgentState *ghosts_out;       // [n_agents]
     
-    // C 直接修改這些數值，不用 return
     int pacman_x_out;
     int pacman_y_out;
     
@@ -82,26 +79,6 @@ typedef struct {
 void step_env_apply_actions_sequential(EnvState *env_state);
 
 void step_env_apply_actions_batch(EnvState *states, int n_envs);
-// =========================
-// Notes for parallel versions
-// =========================
-//
-// - Level 1 (intra-environment, OpenMP):
-//     Implement step_env_apply_actions_parallel(...) with the SAME logical
-//     behavior as the sequential kernel, but parallelize over ghosts.
-//
-// - Level 2 (inter-environment, OpenMP):
-//     Implement a function that loops over multiple environments and calls
-//     the (sequential or Level 1) kernel inside an OpenMP parallel-for
-//     over env_id.
-//
-// - Level 3 (inter-episode, MPI):
-//     Implement a function that distributes different episodes across MPI
-//     ranks, each rank repeatedly calling the (Level 1/2) kernel for its
-//     assigned episodes, and gathering statistics at rank 0.
-//
-// All these parallel functions should include this header and must be
-// tested against the sequential baseline for correctness.
 
 #ifdef __cplusplus
 }

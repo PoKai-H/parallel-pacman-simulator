@@ -1,0 +1,15 @@
+G1_SingleNode,1_Pure_Thread_L2,1,1,64,1,64,4742.06
+G1_SingleNode,2_Nested_Thread_16x4,1,1,16,4,64,1061.36
+G1_SingleNode,4_Hybrid_Standard,1,4,16,1,64,25257.77
+G1_SingleNode,5_Pure_Process,1,64,1,1,64,153230.84
+G2_Cluster_Std,1_Dist_Thread_L2,4,4,64,1,256,28300.53
+G2_Cluster_Std,2_Dist_Nested_16x4,4,4,16,4,256,5176.10
+G2_Cluster_Std,3_Dist_Nested_4x16,4,4,4,16,256,808.95
+G2_Cluster_Std,4_Cluster_Hybrid,4,16,16,1,256,88406.58
+G2_Cluster_Std,5_Cluster_Process_Max,4,256,1,1,256,CRASHed
+G3_Hybrid_Opt,HighDensity_32x2,4,128,1,2,256,131163.29
+G3_Hybrid_Opt,MediumDensity_16x4,4,64,1,4,256,44577.03
+G4_PureMPI_Opt,Pure_MPI_32ppn_1t,4,128,1,1,128,266303.53
+G4_PureMPI_Opt,Pure_MPI_36ppn_1t,4,144,1,1,144,291348.25
+G5_Edge_Case,Pure_MPI_40ppn_1t,4,160,1,1,160,CRASHed
+G5_Edge_Case,Pure_MPI_36ppn_1t,4,144,1,1,144,301515.04

@@ -1,0 +1,5 @@
+Config_Name,Total_Ranks,Threads_Per_Rank,Throughput
+Pure_MPI_Champion,144,1,242784.53
+Pure_MPI_Stable,128,1,229392.00
+Hybrid_Balanced,16,18,77377.63
+Pure_OpenMP,4,72,28914.97

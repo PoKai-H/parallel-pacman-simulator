@@ -1,94 +1,89 @@
-# python/main_mpi.py
-from mpi4py import MPI
-import numpy as np
+# python/main_mpi.py (Debug Version)
+import sys
+import os
 import time
-from pacman_env import PacmanEnv
+import argparse
+import numpy as np
+import traceback 
+from mpi4py import MPI
 
-def run_simulation_batch(n_episodes, rank):
-    """
-    Worker Function: 跑 n 個 episodes，回傳統計數據
-    """
-    # 1. 初始化環境 (每個 Rank 都有獨立的 C Kernel 實例)
-    #    注意：C 內部的 OpenMP 會在這裡發揮 Level 1/2 的加速作用
-    grid = np.zeros((40, 40), dtype=np.int32)
-    # (這邊可以載入真實地圖)
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+
+try:
+    from pacman_env import PacmanVecEnv
+except ImportError as e:
+    print(f"Import Error: {e}", flush=True)
+    sys.exit(1)
+
+def run_worker(rank, n_envs, n_agents, steps):
+    grid = np.zeros((40, 40), dtype=np.int8)
     
-    env = PacmanEnv(grid, n_agents=16)
-    
-    local_results = []
-    
-    start_time = time.time()
-    
-    for i in range(n_episodes):
-        # Reset
+    print(f"[Rank {rank}] 1. Initializing VecEnv ({n_envs} envs)...", flush=True)
+
+    try:
+        env = PacmanVecEnv(grid, n_envs=n_envs, n_agents=n_agents)
         obs = env.reset()
-        done = False
-        total_reward = 0
-        steps = 0
         
-        while not done:
-            # 這裡可以用簡單的 Policy，或者隨機與追蹤混合
-            # 為了測試 HPC 效能，用隨機 Action 即可，重點是操爆 C Kernel
-            ghost_actions = np.random.randint(0, 5, size=16, dtype=np.int32)
-            pacman_action = np.random.randint(0, 5)
-            
-            obs, reward, done, _ = env.step(ghost_actions, pacman_action)
-            total_reward += reward['pacman']
-            steps += 1
-            
-        local_results.append({
-            "episode_id": f"Rank{rank}_Ep{i}",
-            "steps": steps,
-            "pacman_reward": total_reward
-        })
+        # Pre-generate actions
+        actions = np.random.randint(0, 5, size=(n_envs, n_agents), dtype=np.int32)
         
-        if (i+1) % 10 == 0:
-            print(f"[Rank {rank}] Finished {i+1}/{n_episodes} episodes")
+        print(f"[Rank {rank}] 2. Init Done. Waiting at Barrier...", flush=True)
+        
+        # [Checkpoint] 
+        MPI.COMM_WORLD.Barrier()
+        
+        if rank == 0:
+            print(f"[Rank {rank}] 3. Everyone Ready! Starting Loop...", flush=True)
+        
+        start_time = time.time()
+        for _ in range(steps):
+            env.step(actions)
+        end_time = time.time()
+        
+        print(f"[Rank {rank}] 4. Finished!", flush=True)
+        
+        local_steps = n_envs * steps
+        return local_steps / (end_time - start_time)
 
-    end_time = time.time()
-    print(f"[Rank {rank}] Done. Throughput: {steps / (end_time - start_time):.2f} steps/sec")
-    
-    return local_results
+    except Exception as e:
+        print(f"[Rank {rank}] CRASHED: {e}", flush=True)
+        traceback.print_exc() 
+        return 0.0
 
 def main():
-    # 1. MPI 初始化
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n_envs_per_rank", type=int, default=16)
+    parser.add_argument("--n_agents", type=int, default=1024)
+    parser.add_argument("--steps", type=int, default=200)
+    args = parser.parse_args()
+
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-    
-    # 2. 定義總工作量 (例如總共要跑 1000 個 episodes)
-    TOTAL_EPISODES = 1024
-    
-    # 3. 分配工作 (簡單的整除分配)
-    # Rank 0 也可以跑，或者 Rank 0 只當 Manager (看你們策略)
-    # 這裡假設大家一起跑
-    my_episodes = TOTAL_EPISODES // size
-    
-    # 餘數分配給最後一個 Rank
-    if rank == size - 1:
-        my_episodes += TOTAL_EPISODES % size
-        
-    print(f"Rank {rank}/{size} starting... assigned {my_episodes} episodes.")
-    
-    # 4. 開始執行 (Call C Kernel via Python Wrapper)
-    my_data = run_simulation_batch(my_episodes, rank)
-    
-    # 5. 收集結果 (Gather)
-    # all_data 會是一個 list，包含每個 Rank 回傳的 list
-    all_data = comm.gather(my_data, root=0)
-    
-    # 6. Rank 0 統整並輸出
+
     if rank == 0:
-        print("\n=== MPI Simulation Complete ===")
-        # Flatten list of lists
-        flat_results = [item for sublist in all_data for item in sublist]
+        print(f"=== MPI Experiment (Ranks: {size}) ===", flush=True)
         
-        total_steps = sum(r['steps'] for r in flat_results)
-        avg_steps = total_steps / len(flat_results)
-        
-        print(f"Total Episodes: {len(flat_results)}")
-        print(f"Average Steps: {avg_steps:.2f}")
-        # 這裡 Member D 可以接手畫圖
-        
+        print(f"Debug: OMP_NUM_THREADS = {os.environ.get('OMP_NUM_THREADS', 'NOT SET (DANGER!)')}", flush=True)
+
+ 
+    local_throughput = run_worker(rank, args.n_envs_per_rank, args.n_agents, args.steps)
+    
+   
+    try:
+        all_throughputs = comm.gather(local_throughput, root=0)
+    except Exception as e:
+        print(f"[Rank {rank}] Gather Failed: {e}", flush=True)
+        sys.exit(1)
+
+    if rank == 0:
+        total_throughput = sum(all_throughputs)
+        print(f"Final Total Throughput: {total_throughput:.2f} env_steps/s", flush=True)
+
 if __name__ == "__main__":
     main()

@@ -2,7 +2,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h> // for memset
-#include <omp.h> // 1. 引入 OpenMP 頭文件
+#include <omp.h> 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -39,25 +39,25 @@ static void action_to_delta(int action, int *dx, int *dy) {
 // Helper Functions (Math & RNG)
 // ==========================================
 
-// 從 Pool 拿亂數 (Thread-safe friendly logic)
+// Thread-safe friendly logic
 static inline float get_rand(const float *pool, int size, int *idx) {
     float val = pool[*idx];
-    *idx = (*idx + 1) % size; // 循環使用
+    *idx = (*idx + 1) % size; 
     return val;
 }
 
-// Box-Muller Transform: 產生高斯分佈 N(mean, std)
+// Box-Muller Transform: Gaussian~N(mean, std)
 static float sample_normal(float mean, float std, const float *pool, int size, int *idx) {
     float u1 = get_rand(pool, size, idx);
     float u2 = get_rand(pool, size, idx);
     
-    if(u1 < 1e-6f) u1 = 1e-6f; // 避免 log(0)
+    if(u1 < 1e-6f) u1 = 1e-6f; // Avoid log(0)
     
     float z0 = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * M_PI * u2);
     return mean + z0 * std;
 }
 
-// 內部結構，用於 KNN 排序
+// For KNN ranking
 typedef struct {
     int id;
     float dx;
@@ -141,13 +141,31 @@ void compute_observations(EnvState *s) {
     float gw = (float)s->grid_w;
     float gh = (float)s->grid_h;
 
-    // 1. OpenMP 平行化 (注意 schedule 用 static 對齊 N=16)
+    // 1. OpenMP 
     #pragma omp parallel for default(none) shared(s, gw, gh) schedule(static)
     for (int i = 0; i < s->n_agents; i++) {
         
-        // 2. 宣告在迴圈內 (Private) & 加上 * 取值
+        // ==========================================
+        // Synthetic Heavy Load
+        // ==========================================
+        // 模擬：複雜的感知運算 (例如 Ray Tracing 或 NN Layer)
+        float dummy_val = 0.0f;
+        // k
+        // 100 -> easy loading
+        // 1000 -> medium loading
+        // 5000 -> heavy loading(openmp should take the advantage)
+        for (int k = 0; k < 100; k++) {
+            dummy_val += sinf(k * 0.01f + i) * cosf(k * 0.002f);
+            dummy_val = sqrtf(fabsf(dummy_val + 1.0f));
+        }
+        
+        // dummy diagnostic to prevent compiler optimize the function above
+        if (dummy_val > 1000000.0f) {
+             s->ghosts_out[i].x += 1; 
+        }
+
         int local_rand_idx = (*s->rand_idx + i * 131) % s->rand_pool_size;
-        int *p_rand_idx = &local_rand_idx; // 指向區域變數
+        int *p_rand_idx = &local_rand_idx; 
 
         float *my_obs = &s->obs_out[i * OBS_DIM_ALIGNED];
         AgentState me = s->ghosts_out[i];
@@ -171,7 +189,6 @@ void compute_observations(EnvState *s) {
             float conf = expf(-alpha * dist);
             float sigma = 0.1f * dist; 
             
-            // 3. 關鍵檢查點：這裡一定要傳 p_rand_idx，絕對不能傳 s->rand_idx
             float nx = sample_normal(0.0f, sigma, s->rand_pool, s->rand_pool_size, p_rand_idx);
             float ny = sample_normal(0.0f, sigma, s->rand_pool, s->rand_pool_size, p_rand_idx);
             
@@ -192,7 +209,6 @@ void compute_observations(EnvState *s) {
         }
 
         // --- Neighbor Sensing (KNN) ---
-        // 注意：candidates 也要宣告在迴圈內
         NeighborCandidate candidates[16]; 
         int count = 0;
 
@@ -238,7 +254,7 @@ void compute_observations(EnvState *s) {
         }
     } 
 
-    // 4. 更新全域亂數 (for next step)
+    // 4. updating random (for next step)
     *s->rand_idx = (*s->rand_idx + s->n_agents * 7) % s->rand_pool_size;
 }
 
@@ -246,10 +262,9 @@ void compute_observations(EnvState *s) {
 // Main Entry Point
 // ==========================================
 void step_env_apply_actions_sequential(EnvState *s) {
-    // 1. Physics (移動與碰撞)
+    // 1. Physics 
     apply_physics(s);
 
-    // 2. Sensing (產生 Observation)
-    // 這一部分在 Level 1 會被 OpenMP 平行化
+    // 2. Sensing (Observation)
     compute_observations(s);
 }

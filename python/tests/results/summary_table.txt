@@ -1,0 +1,14 @@
+
+============================================================
+            🏁 FINAL UNIFIED PERFORMANCE REPORT 🏁            
+============================================================
+Experiment                     | Metric          | Best Result
+------------------------------------------------------------
+Level 1 (OpenMP Agent)         | Max Throughput  | 1774 steps/s
+Level 2 (OpenMP Env)           | Max Speedup     | 31.25x
+Level 3 (MPI Distributed)      | Max Speedup     | 61.57x
+Hybrid (Heavy Load, 64c)       | Best Strategy   | Hybrid
+                               | Throughput      | 254 env_steps/s
+Exp 05 (Multilevel Arch)       | Best Strategy   | Pure MPI (L3)
+                               | Throughput      | 1556 env_steps/s
+============================================================

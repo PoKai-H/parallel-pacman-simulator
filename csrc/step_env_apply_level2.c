@@ -13,10 +13,6 @@
  */
 void step_env_apply_actions_batch_sequential(EnvState *states, int n_envs) {
     for (int i = 0; i < n_envs; i++) {
-        // 因為現在架構是 Pass-by-Pointer，
-        // step_env_apply_actions_sequential 會直接修改 states[i] 內部的記憶體
-        // (例如直接寫入 pacman_x_out, obs_out 等)
-        // 所以這裡不需要手動 unpacking / packing 變數，非常乾淨。
         step_env_apply_actions_sequential(&states[i]);
     }
 }
@@ -31,14 +27,14 @@ void step_env_apply_actions_batch_sequential(EnvState *states, int n_envs) {
  */
 void step_env_apply_actions_batch(EnvState *states, int n_envs) {
     
-    // --- Member B 的任務區域 ---
     
-    // 目前先呼叫 Sequential 版，確保編譯通過且能跑
+    
+    
     #pragma omp parallel for default(none) shared(states, n_envs) schedule(static)
-    // 當你開始實作時，請註解掉下面這行，並寫入你的 OpenMP 迴圈
+    
     for (int i = 0; i < n_envs; i++) {
         
-        // Debug: 只印出前兩個環境的指標狀態
+        // Debug: 
         // if (i < 2) {
         //     printf("--- Debug Env %d ---\n", i);
         //     printf("Base Addr: %p\n", (void*)&states[i]);
@@ -54,21 +50,6 @@ void step_env_apply_actions_batch(EnvState *states, int n_envs) {
     }
 }
 
-    // #pragma omp parallel for：OpenMP 建立一個 thread team，
-    // 把 for 迴圈的 iteration（這裡是每個 i 代表一個 env）分配給不同 thread 執行。
-    // default(none)：
-    //   - 強制你必須明確標註每個變數是 shared 還是 private，
-    //   - 避免不小心把某個變數「默認共享」造成 data race，
-    //   - 這是寫平行程式時非常推薦的安全做法（能讓 compiler 幫你抓錯）。
-    // shared(states, n_envs)：
-    //   - states 指向整個 EnvState 陣列，所有 threads 都看得到同一個指標（共享讀取/索引）
-    //   - n_envs 是迴圈上界，也需要共享
-    //   - 但每個 thread 實際只會寫它負責的 states[i]，因此不會互相覆寫（前提是 state 真的是 per-env）。
-    // schedule(static)：
-    //   - 用「靜態分配」的方式分工：一開始就把 i 的範圍切好分給 threads
-    //   - overhead 最低，通常適合「每個 env step 工作量差不多」的情況
-    //   - 若 env 的工作量差很大才考慮 dynamic/guided
-// csrc/step_env_apply_level2.c 最下方加入
 int get_c_struct_size() {
     return sizeof(EnvState);
 }
