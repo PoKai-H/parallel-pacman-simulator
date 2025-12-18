@@ -10,9 +10,11 @@ We have met and exceeded all testing requirements. Here is a quick map to verify
 
 | Requirement | Your Target | Our Count | Location in README |
 | :--- | :--- | :--- | :--- |
-| **Correctness Tests** | 25 Tests | **80+ Cases** | [See Correctness Tests](#-correctness-tests-80-cases) |
-| **Speedup Tests** | 10 Tests | **10 Cases** | [See Performance Tests](#-performance--speedup-tests-15-cases) |
-| **Implementations** | 5 Variants | **5 Variants** | [See Implementations](#-5-parallel-implementations) |
+| **Correctness Tests** | 25 Tests | **80+ Cases** | [See Correctness Tests](#correctness-tests) |
+| **Speedup Tests** | 10 Tests | **10 Cases** | [See Performance Tests](#performance-tests) |
+| **Implementations** | 5 Variants | **5 Variants** | [See Implementations](#implementations) |
+
+
 
 
 ## 🛠️ Build & Installation
@@ -33,7 +35,7 @@ We have met and exceeded all testing requirements. Here is a quick map to verify
     *This generates `python/libpacman.so`, which is required for the Python wrapper.*
 
 ---
-
+<a id="correctness-tests"></a>
 ## 🧪 Correctness Tests 
 
 We utilize `pytest` to run a comprehensive suite of unit and integration tests. The test suite covers game mechanics, thread safety, memory isolation, and MPI consistency.
@@ -65,7 +67,8 @@ pytest -v verify_00_machanics.py level1/correctness/verify_01_thread_safety.py l
 - **Load Balancing**: Tests correct handling of remainder environments (e.g., 10 envs on 3 ranks).
 - **Oversubscription**: Verifies behavior when `rank_count > env_count`.
 ---
-# 🚀 Performance & Speedup Tests 
+<a id="performance-tests"></a>
+## 🚀 Performance & Speedup Tests 
 
 We define 10 distinct performance scenarios to analyze speedup across different architectural levels. These are split into Experimental Analysis (`exp_`) and Full System Benchmarks (`run_g`).
 
@@ -132,7 +135,8 @@ cd python
 ./run_g4_pure_mpi.sh
 ```
 ---
-# 🧠 5 Parallel Implementations
+<a id="implementations"></a>
+## 🧠 5 Parallel Implementations
 
 To explore the trade-offs in parallel RL simulation, we implemented and compared 5 distinct variants:
 
@@ -147,7 +151,7 @@ To explore the trade-offs in parallel RL simulation, we implemented and compared
 5. **Hybrid (MPI + OpenMP)**: Hierarchical parallelism (`python/run_g3_hybrid_opt.sh`). Uses MPI across nodes and OpenMP within nodes.
 
 ---
-# 📂 Project Structure
+## 📂 Project Structure
 ```
 .
 ├── csrc/               # C Source Code (Kernel)
