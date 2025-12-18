@@ -1,0 +1,16 @@
+==========================================================
+64-Core Hybrid Parallelism Experiment
+==========================================================
+
+Scenario A: Massive Batch (N_ENVS=64)
+----------------------------------------------------------
+1. Strategy [64, 1] (Pure Level 2): Final Result - Throughput: 219.82 env_steps/s
+2. Strategy [16, 4] (Hybrid Mode ): Final Result - Throughput: 253.76 env_steps/s
+3. Strategy [ 1,64] (Pure Level 1): Final Result - Throughput: 35.88 env_steps/s
+
+Scenario B: Small Batch / Latency Critical (N_ENVS=4)
+----------------------------------------------------------
+1. Strategy [64, 1] (Pure Level 2): Final Result - Throughput: 25.48 env_steps/s
+2. Strategy [ 4,16] (Hybrid Mode ): Final Result - Throughput: 69.26 env_steps/s
+3. Strategy [ 1,64] (Pure Level 1): Final Result - Throughput: 28.06 env_steps/s
+==========================================================

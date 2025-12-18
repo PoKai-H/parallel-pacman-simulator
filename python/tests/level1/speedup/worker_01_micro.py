@@ -1,0 +1,48 @@
+import sys
+import os
+import time
+import numpy as np
+import argparse  
+
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+sys.path.append(project_root)
+
+from pacman_env import PacmanEnv
+
+def run_benchmark(grid_size, n_agents, steps):
+    print(f"=== Config: Grid={grid_size}x{grid_size}, Agents={n_agents}, Steps={steps} ===")
+    
+    
+    grid = np.zeros((grid_size, grid_size), dtype=np.int32)
+    env = PacmanEnv(grid, n_agents=n_agents) 
+    env.reset()
+    
+    
+    actions = np.random.randint(0, 5, size=(steps, n_agents), dtype=np.int32)
+    
+    start_time = time.time()
+    
+    
+    for i in range(steps):
+        env.step(actions[i], pacman_action=0)
+        
+    end_time = time.time()
+    duration = end_time - start_time
+    sps = steps / duration
+    
+    print(f"Total Time: {duration:.4f} sec")
+    print(f"Throughput: {sps:.2f} Steps/Sec")
+
+if __name__ == "__main__":
+    
+    parser = argparse.ArgumentParser(description='Pacman Performance Test')
+    parser.add_argument('--grid_size', type=int, default=80, help='Size of the grid (NxN)')
+    parser.add_argument('--n_agents', type=int, default=256, help='Number of agents')
+    parser.add_argument('--steps', type=int, default=10000, help='Number of steps')
+    
+    args = parser.parse_args()
+    
+    
+    run_benchmark(args.grid_size, args.n_agents, args.steps)

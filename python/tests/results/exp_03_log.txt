@@ -1,0 +1,29 @@
+==========================================================
+MPI Strong Scaling Test (Total Workload: 64 Envs)
+   Settings: 1024 Agents/Env, 5 Steps
+==========================================================
+Running Baseline (1 Rank)...
+ -> Baseline FPS: 103.37
+Running with 2 Ranks (Load: 32 Envs/Rank)...
+ -> 2 Ranks FPS: 190.62 | Speedup: x1.84 | Eff: 92%
+Running with 4 Ranks (Load: 16 Envs/Rank)...
+ -> 4 Ranks FPS: 389.44 | Speedup: x3.77 | Eff: 94%
+Running with 8 Ranks (Load: 8 Envs/Rank)...
+ -> 8 Ranks FPS: 788.94 | Speedup: x7.63 | Eff: 95%
+Running with 16 Ranks (Load: 4 Envs/Rank)...
+ -> 16 Ranks FPS: 1581.90 | Speedup: x15.30 | Eff: 96%
+Running with 32 Ranks (Load: 2 Envs/Rank)...
+ -> 32 Ranks FPS: 3152.06 | Speedup: x30.49 | Eff: 95%
+Running with 64 Ranks (Load: 1 Envs/Rank)...
+ -> 64 Ranks FPS: 6286.40 | Speedup: x60.81 | Eff: 95%
+==========================================================
+Done! Results saved to results/mpi_scaling_results.csv
+MPI Scaling Test Results
+Ranks,Throughput,Speedup,Efficiency
+1,103.37,1.0,100%
+2,190.62,1.84405533520363741898,92.20276676018187094900
+4,389.44,3.76743736093644190771,94.18593402341104769200
+8,788.94,7.63219502757086195221,95.40243784463577440200
+16,1581.90,15.30327948147431556544,95.64549675921447228400
+32,3152.06,30.49298635967882364322,95.29058237399632388500
+64,6286.40,60.81454967592144722840,95.02273386862726129400

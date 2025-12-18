@@ -3,7 +3,7 @@ import ctypes as C
 import numpy as np
 
 # ==========================================
-# 1. C Struct Definitions (必須與 common.h 完全一致)
+# 1. C Struct Definitions 
 # ==========================================
 
 class AgentState(C.Structure):
@@ -49,7 +49,6 @@ class EnvState(C.Structure):
         ("done", C.c_int),
 
         # --- Observation Output ---
-        # [NEW] 對應 common.h 的 obs_out
         ("obs_out", C.POINTER(C.c_float)),
         ("_padding", C.c_char * 128)
     ]
@@ -74,7 +73,6 @@ lib.step_env_apply_actions_sequential.restype = None
 # 3. Python Environment Wrapper
 # ==========================================
 
-# 定義常數，對應 common.h
 MAX_NEIGHBORS = 4
 OBS_DIM = 2 + 3 + (MAX_NEIGHBORS * 3) # 17
 OBS_DIM_ALIGNED = 32
@@ -100,15 +98,13 @@ class PacmanEnv:
         self.ghost_actions = np.zeros(n_agents, dtype=np.int32)
         self.ghost_rewards = np.zeros(n_agents, dtype=np.float32)
 
-        # [NEW] Random Pool Initialization
-        # 預先生成 100 萬個 [0, 1) 的浮點數給 C 使用
+        # Random Pool Initialization
         pool_size = 1_000_000
         self.rand_pool = np.random.uniform(0, 1, size=pool_size).astype(np.float32)
         self.rand_pool_ptr = self.rand_pool.ctypes.data_as(C.POINTER(C.c_float))
         self.rand_idx = C.c_int(0) # Index counter
 
-        # [NEW] Observation Buffer
-        # 每個 Agent 17 個 float
+        # Observation Buffer
         self.obs_buffer = np.zeros(n_agents * OBS_DIM_ALIGNED, dtype=np.float32)
         self.obs_buffer_ptr = self.obs_buffer.ctypes.data_as(C.POINTER(C.c_float))
 
@@ -125,7 +121,7 @@ class PacmanEnv:
         self.state.ghost_actions = self.ghost_actions.ctypes.data_as(C.POINTER(C.c_int))
         self.state.ghost_rewards = self.ghost_rewards.ctypes.data_as(C.POINTER(C.c_float))
         
-        # [NEW] Pointers for RNG and Obs
+        # Pointers for RNG and Obs
         self.state.rand_pool = self.rand_pool_ptr
         self.state.rand_pool_size = pool_size
         self.state.rand_idx = C.pointer(self.rand_idx)
@@ -155,24 +151,14 @@ class PacmanEnv:
         return self._get_obs()
 
     def _get_obs(self):
-        """
-        關鍵修改：
-        1. Reshape 成 (N, 32) 包含 padding
-        2. Slice 取前 17 個有效值
-        """
-        # Step 1: 把 1D buffer 轉成 (N, 32)
         raw_tensor = self.obs_buffer.reshape((self.n_agents, OBS_DIM_ALIGNED))
         
-        # Step 2: [關鍵] 切片！只取前 17 個欄位
-        # [:, :17] 意思是：取所有 Agents，但只取 Feature 0 到 16
-        # .copy() 很重要，確保回傳的是乾淨的記憶體區塊
         ghost_obs_tensor = raw_tensor[:, :OBS_DIM].copy()
 
-        # Step 3: Pacman 位置
         pac_pos = np.array([self.pac_x, self.pac_y], dtype=np.int32)
         
         return {
-            "ghost_tensor": ghost_obs_tensor, # 這裡回傳的會是 (N, 17)
+            "ghost_tensor": ghost_obs_tensor, # (N, 17)
             "pacman": pac_pos
         }
 
@@ -225,22 +211,18 @@ class PacmanVecEnv:
         self.max_steps = max_steps
         self.h, self.w = grid.shape
         
-        # 1. 配置連續記憶體 (Contiguous Memory Allocation)
-        # 這是 Level 2 效能的關鍵，所有環境的狀態必須擠在一起
+        # 1. Contiguous Memory Allocation)
         self.env_states = (EnvState * n_envs)()
         
-        # 2. 共用資源 (Grid & Random Pool)
-        # 為了省記憶體，所有環境共用同一張地圖
+        # 2. (Grid & Random Pool)
         self.grid_np = grid.astype(np.int8).copy()
         self.grid_ptr = self.grid_np.ctypes.data_as(C.POINTER(C.c_int8))
         
-        # 準備亂數池
         pool_size = 1_000_000
         self.rand_pool = np.random.uniform(0, 1, size=pool_size).astype(np.float32)
         self.rand_pool_ptr = self.rand_pool.ctypes.data_as(C.POINTER(C.c_float))
         
-        # 3. 為每個環境分配內部的 Pointer
-        # 這些 list 用來防止 Python Garbage Collection 回收記憶體
+        # 3. Inside Pointer for every environment
         self._keep_alive = []
         
         for i in range(n_envs):
@@ -255,7 +237,6 @@ class PacmanVecEnv:
             s.rand_pool_size = pool_size
             
             # Allocation
-            # 每個環境還是需要自己獨立的 agents, actions, obs 記憶體
             ghosts_in = (AgentState * n_agents)()
             ghosts_out = (AgentState * n_agents)()
             ghost_actions = (C.c_int * n_agents)()
@@ -263,7 +244,7 @@ class PacmanVecEnv:
             
             # 32 float aligned observation
             obs = (C.c_float * (n_agents * OBS_DIM_ALIGNED))()
-            rand_idx = C.c_int(i * 100) # 錯開每個環境的亂數起點
+            rand_idx = C.c_int(i * 100) 
             
             # Linking
             s.ghosts_in = C.cast(ghosts_in, C.POINTER(AgentState))
@@ -283,12 +264,10 @@ class PacmanVecEnv:
             # Keep alive
             self._keep_alive.append((ghosts_in, ghosts_out, ghost_actions, ghost_rewards, obs, rand_idx))
             
-        # 4. 建立 Numpy Views (方便 Python 讀寫，不用 copy)
-        # 我們需要一個方法快速把 Action 塞進去，並把 Observation 拿出來
-        # 這裡為了簡單，我們在 step 裡面做 copy，追求極致效能可以用更進階的 buffer protocol
+       
             
     def reset(self):
-        """重置所有環境"""
+        """reset every env"""
         for i in range(self.n_envs):
             s = self.env_states[i]
             s.pacman_x_in = self.w // 2
@@ -302,8 +281,6 @@ class PacmanVecEnv:
                 ghosts_in[j].x = 1
                 ghosts_in[j].y = 1
                 
-        # 雖然剛 reset，但也算一次 step 讓 C 產生初始 observation
-        # 這裡偷懶直接回傳全零或是呼叫一次 C
         return self._get_batch_obs()
 
     def step(self, actions):
@@ -311,40 +288,33 @@ class PacmanVecEnv:
         actions: shape (n_envs, n_agents) of int32
         pacman_actions: shape (n_envs,) of int32 (Optional, default 0)
         """
-        # 1. 將 Python Action 填入 C Struct
-        # 這是 Python overhead 最大的地方，可以用 Cython 優化，但現在先用迴圈
         for i in range(self.n_envs):
-            # 取得該環境的 ghost_actions array (C type)
+            # ghost_actions array (C type)
             c_actions = self._keep_alive[i][2] 
-            # 這裡假設 actions[i] 是 numpy array
-            # 用 ctypes 的 memmove 或 slice assignment 會比較快
+            # actions[i] is numpy array
             for j in range(self.n_agents):
                 c_actions[j] = actions[i, j]
                 
             # Update double buffering pointers (swap in/out)
-            # 在 Batch 模式下，我們需要手動交換 struct 裡的指標
             s = self.env_states[i]
             temp = s.ghosts_in
             s.ghosts_in = s.ghosts_out
             s.ghosts_out = temp
             
-            # 更新 Pacman 位置 (將上一步的 out 變成這一步的 in)
             s.pacman_x_in = s.pacman_x_out
             s.pacman_y_in = s.pacman_y_out
             
-        # 2. 呼叫 C 語言核心 (Level 2 Parallelism Happens Here!)
         lib.step_env_apply_actions_batch(self.env_states, self.n_envs)
         
-        # 3. 收集結果
+        
         obs = self._get_batch_obs()
         
-        # 收集 Rewards & Done
+        
         rewards = np.zeros((self.n_envs, self.n_agents), dtype=np.float32)
         dones = np.zeros(self.n_envs, dtype=bool)
         
         for i in range(self.n_envs):
             c_rewards = self._keep_alive[i][3]
-            # 簡單搬運
             for j in range(self.n_agents):
                 rewards[i, j] = c_rewards[j]
             dones[i] = bool(self.env_states[i].done)
@@ -353,20 +323,19 @@ class PacmanVecEnv:
 
     def _get_batch_obs(self):
         """
-        高效取出所有環境的 Observation
+        Observation
         Return: (n_envs, n_agents, 17)
         """
         batch_obs = np.zeros((self.n_envs, self.n_agents, 17), dtype=np.float32)
         
         for i in range(self.n_envs):
-            # 取出 C array
-            c_obs = self._keep_alive[i][4] # obs buffer
-            # [修正] 1. 先轉成 1D Numpy Array
-            flat_view = np.ctypeslib.as_array(c_obs)
             
-            # [修正] 2. 手動 Reshape 成 (N_AGENTS, 32)
+            c_obs = self._keep_alive[i][4] # obs buffer
+            
+            flat_view = np.ctypeslib.as_array(c_obs)
+        
             full_view = flat_view.reshape((self.n_agents, OBS_DIM_ALIGNED))
-            # 切片取前 17
+            
             batch_obs[i] = full_view[:, :OBS_DIM]
             
         return batch_obs

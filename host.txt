@@ -1,0 +1,4 @@
+csel-plate01 slots=72 
+csel-plate02 slots=72
+csel-plate03 slots=72
+csel-plate04 slots=72
