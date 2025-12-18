@@ -1,8 +1,8 @@
 # Parallel Pacman Simulator: High-Performance Multi-Agent Environment
 
-Contributers: Po-Kai Huang, Henry Tsai, Shih-Wen Huang, Chih-Ying Liu, Max Lin
+Contributors: Po-Kai Huang, Henry Tsai, Shih-Wen Huang, Chih-Ying Liu, Max Lin
 
-This project implements a high-performance, parallelized Pacman simulator using C(Kernel), OpenMP, and MPI, wrapped in Python. It demonstrates linear scaling(31.06x) on 32-core nodes and scales effectively to 144 distributed MPI ranks(~290k steps/s)
+This project implements a high-performance, parallelized Pacman simulator using C (Kernel), OpenMP, and MPI, wrapped in Python. It demonstrates linear scaling (31.06x) on 32-core nodes and scales effectively to 144 distributed MPI ranks (~290k steps/s)
 
 ## 📋 Compliance Matrix (For Graders)
 
@@ -11,7 +11,7 @@ We have met and exceeded all testing requirements. Here is a quick map to verify
 | Requirement | Your Target | Our Count | Location in README |
 | :--- | :--- | :--- | :--- |
 | **Correctness Tests** | 25 Tests | **80+ Cases** | [See Correctness Tests](#correctness-tests) |
-| **Speedup Tests** | 10 Tests | **10 Senarios(Multiple Tests per Senarios)** | [See Performance Tests](#performance-tests) |
+| **Speedup Tests** | 10 Tests | **10 Scenarios(Multiple Tests per Scenarios)** | [See Performance Tests](#performance-tests) |
 | **Implementations** | 5 Variants | **5 Variants** | [See Implementations](#implementations) |
 
 
@@ -44,7 +44,7 @@ We utilize `pytest` to run a comprehensive suite of unit and integration tests. 
 ```bash
 cd python/tests
 # Run the full suite with verbose output
-pytest -v verify_00_machanics.py level1/correctness/verify_01_thread_safety.py level2/correctness/verify_02_mem_isolation.py level3/correctness/verify_03_mpi_consistemcy.py
+pytest -v verify_00_mechanics.py level1/correctness/verify_01_thread_safety.py level2/correctness/verify_02_mem_isolation.py level3/correctness/verify_03_mpi_consistency.py
 ```
 ### Detailed Test Breakdown
 **A. Game Mechanics & Scalability Stress (`verify_00_machanics.py`)**
@@ -83,7 +83,7 @@ Located in `python/tests/`
 2.`exp_02_throughput.sh:`
 - Goal: Analyzes Level 2 (Environment-parallelism) strong scaling.
 
-- Result: 31.05x speedup on 32 threads (Linear Scaling).
+- Result: 31.06x speedup on 32 threads (Linear Scaling).
 
 3.`exp_03_mpi_scaling.sh:`
 
@@ -130,7 +130,7 @@ Located in `python/`
 cd python/tests
 ./exp_02_throughput.sh
 
-# Exmaple: Run Pure MPI Benchmark
+# Example: Run Pure MPI Benchmark
 cd python
 ./run_g4_pure_mpi.sh
 ```
@@ -182,7 +182,7 @@ To explore the trade-offs in parallel RL simulation, we implemented and compared
 
 2. **Level 1 (Fine-Grained)**: OpenMP parallelism over Agents within a single environment (`python/tests/level1/speedup/worker_01_micro.py`). Best for few environments with complex agents.
 
-3. **Level 2 (Coarse-Grained)**: OpenMP parallelism over Environments (`python/tests/level2/speedup/worker_02_throughput.py`). Best Single-Node Performance (31x speedup).
+3. **Level 2 (Coarse-Grained)**: OpenMP parallelism over Environments (`python/tests/level2/speedup/worker_02_throughput.py`). Best Thread-Scaling (31x speedup).
 
 4. **Level 3 (Pure MPI)**: Distributed parallelism using MPI processes (`python/run_g4_pure_mpi.sh`). Best for scaling beyond one node.
 
