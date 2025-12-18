@@ -11,7 +11,7 @@ We have met and exceeded all testing requirements. Here is a quick map to verify
 | Requirement | Your Target | Our Count | Location in README |
 | :--- | :--- | :--- | :--- |
 | **Correctness Tests** | 25 Tests | **80+ Cases** | [See Correctness Tests](#correctness-tests) |
-| **Speedup Tests** | 10 Tests | **10 Cases** | [See Performance Tests](#performance-tests) |
+| **Speedup Tests** | 10 Tests | **10 Senarios(Multiple Tests per Senarios)** | [See Performance Tests](#performance-tests) |
 | **Implementations** | 5 Variants | **5 Variants** | [See Implementations](#implementations) |
 
 
@@ -78,7 +78,7 @@ Located in `python/tests/`
 
 1.`exp_01_micro_scaling.sh:`
   - Goal: Analyzes Level 1 (Agent-parallelism) scaling.
-  - Metric: Speedup vs. Agent Count (16 to 4096).
+  - Metric: Speedup vs. Agent Count (e.g., 128 to 512 in script, scalable to 4096).
 
 2.`exp_02_throughput.sh:`
 - Goal: Analyzes Level 2 (Environment-parallelism) strong scaling.
@@ -87,7 +87,7 @@ Located in `python/tests/`
 
 3.`exp_03_mpi_scaling.sh:`
 
-- Goal: Analyzes Level 3 (MPI) distributed weak scaling across nodes.
+- Goal: Analyzes Level 3 (MPI) distributed strong scaling (fixed total workload of 64 Envs) across nodes.
 
 - Result: Scaled to 144 ranks with ~290k steps/s throughput.
 
@@ -122,7 +122,7 @@ Located in `python/`
 
 10.`run_g5_edge_detection.sh:`
 
-- Goal: Measures communication overhead for "Ghost Exchange" (Halo regions) logic.
+- Goal: Stress tests the system limits and Ghost Exchange overhead by pushing MPI ranks to the breakdown point (e.g., 160 ranks).
 
 **How to Run a Performance Test:**
 ```bash
