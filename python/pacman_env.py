@@ -1,9 +1,11 @@
-# python/pacman_env.py
 import os
 import ctypes as C
 import numpy as np
 
-# ----- C struct: must match common.h -----
+# ==========================================
+# 1. C Struct Definitions 
+# ==========================================
+
 class AgentState(C.Structure):
     _fields_ = [
         ("x", C.c_int),
@@ -11,215 +13,329 @@ class AgentState(C.Structure):
         ("alive", C.c_int),
     ]
 
-# ----- load shared library -----
+class EnvState(C.Structure):
+    """
+    Must match the layout in csrc/common.h exactly.
+    """
+    _fields_ = [
+        # --- Config (Read Only) ---
+        ("grid_h", C.c_int),
+        ("grid_w", C.c_int),
+        ("n_agents", C.c_int),
+        ("grid", C.POINTER(C.c_int8)),  # int8 optimization
+
+        # --- Input State (Read Only) ---
+        ("ghosts_in", C.POINTER(AgentState)),
+        ("ghost_actions", C.POINTER(C.c_int)),
+        
+        ("pacman_x_in", C.c_int),
+        ("pacman_y_in", C.c_int),
+        ("pacman_action", C.c_int),
+        ("pacman_speed", C.c_int),
+
+        # --- Random Number Generation (Input) ---
+        # [NEW] 對應 common.h 的 rand_pool
+        ("rand_pool", C.POINTER(C.c_float)),
+        ("rand_pool_size", C.c_int),
+        ("rand_idx", C.POINTER(C.c_int)),
+
+        # --- Output State (Write Only) ---
+        ("ghosts_out", C.POINTER(AgentState)),
+        ("pacman_x_out", C.c_int),
+        ("pacman_y_out", C.c_int),
+        
+        ("ghost_rewards", C.POINTER(C.c_float)),
+        ("pacman_reward", C.c_float),
+        ("done", C.c_int),
+
+        # --- Observation Output ---
+        ("obs_out", C.POINTER(C.c_float)),
+        ("_padding", C.c_char * 128)
+    ]
+
+# ==========================================
+# 2. Load Library
+# ==========================================
+
 HERE = os.path.dirname(__file__)
 LIB_PATH = os.path.join(HERE, "libpacman.so")
+
+if not os.path.exists(LIB_PATH):
+    raise FileNotFoundError(f"Library not found at {LIB_PATH}. Did you run 'make' in csrc/?")
+
 lib = C.CDLL(LIB_PATH)
 
-# void step_env_apply_actions_sequential(
-#     int grid_h, int grid_w,
-#     const int *grid,
-#     int n_agents,
-#     const AgentState *ghosts_in,
-#     const int *ghost_actions,
-#     AgentState *ghosts_out,
-#     int pacman_x_in,
-#     int pacman_y_in,
-#     int pacman_action,
-#     int pacman_speed,
-#     int *pacman_x_out,
-#     int *pacman_y_out,
-#     float *ghost_rewards,
-#     float *pacman_reward,
-#     int *done
-# );
-lib.step_env_apply_actions_sequential.argtypes = [
-    C.c_int,                        # grid_h
-    C.c_int,                        # grid_w
-    C.POINTER(C.c_int),             # grid
-    C.c_int,                        # n_agents
-    C.POINTER(AgentState),          # ghosts_in
-    C.POINTER(C.c_int),             # ghost_actions
-    C.POINTER(AgentState),          # ghosts_out
-    C.c_int,                        # pacman_x_in
-    C.c_int,                        # pacman_y_in
-    C.c_int,                        # pacman_action
-    C.c_int,                        # pacman_speed
-    C.POINTER(C.c_int),             # pacman_x_out
-    C.POINTER(C.c_int),             # pacman_y_out
-    C.POINTER(C.c_float),           # ghost_rewards
-    C.POINTER(C.c_float),           # pacman_reward
-    C.POINTER(C.c_int),             # done
-]
+# void step_env_apply_actions_sequential(EnvState *s);
+lib.step_env_apply_actions_sequential.argtypes = [C.POINTER(EnvState)]
 lib.step_env_apply_actions_sequential.restype = None
 
+# ==========================================
+# 3. Python Environment Wrapper
+# ==========================================
 
+MAX_NEIGHBORS = 4
+OBS_DIM = 2 + 3 + (MAX_NEIGHBORS * 3) # 17
+OBS_DIM_ALIGNED = 32
 
 class PacmanEnv:
-    """
-    Minimal environment wrapper.
-
-    - Grid: 2D numpy int32, values:
-        0 = empty, 1 = wall, 2 = pellet (not used in minimal version)
-    - Ghosts: n_agents with positions stored in AgentState array.
-    - Pacman: single (x, y) stored as separate ints.
-    - Actions: 0=stay, 1=up, 2=down, 3=left, 4=right
-    - Speeds:
-        * Ghosts: implicitly speed = 1
-        * Pacman: speed = pacman_speed (0,1,2), chosen in Python
-    """
-
-    def __init__(self, grid: np.ndarray, n_agents: int = 14, max_steps: int = 200):
+    def __init__(self, grid: np.ndarray, n_agents: int = 16, max_steps: int = 200):
         assert grid.ndim == 2, "grid must be 2D"
-        self.grid = grid.astype(np.int32).copy()
+        
+        # Grid Optimization (int8)
+        self.grid = grid.astype(np.int8).copy()
         self.h, self.w = self.grid.shape
         self.n_agents = n_agents
         self.max_steps = max_steps
 
-        # C pointers
-        self.grid_ptr = self.grid.ctypes.data_as(C.POINTER(C.c_int))
+        # --- Memory Buffers ---
+        # Ghost states (Double buffering)
+        self.ghosts_buf_1 = (AgentState * n_agents)()
+        self.ghosts_buf_2 = (AgentState * n_agents)()
+        self.ptr_ghosts_in = self.ghosts_buf_1
+        self.ptr_ghosts_out = self.ghosts_buf_2
 
-        # ghost states (double-buffered: ghosts / ghosts_next)
-        self.ghosts = (AgentState * n_agents)()
-        self.ghosts_next = (AgentState * n_agents)()
-
-        # ghost actions
+        # Actions & Rewards
         self.ghost_actions = np.zeros(n_agents, dtype=np.int32)
-        self.ghost_actions_ptr = self.ghost_actions.ctypes.data_as(
-            C.POINTER(C.c_int)
-        )
-
-        # rewards
         self.ghost_rewards = np.zeros(n_agents, dtype=np.float32)
-        self.ghost_rewards_ptr = self.ghost_rewards.ctypes.data_as(
-            C.POINTER(C.c_float)
-        )
-        self.pac_reward = C.c_float(0.0)
 
-        # pacman state
-        self.pac_x = C.c_int(0)
-        self.pac_y = C.c_int(0)
-        self.pac_x_next = C.c_int(0)
-        self.pac_y_next = C.c_int(0)
+        # Random Pool Initialization
+        pool_size = 1_000_000
+        self.rand_pool = np.random.uniform(0, 1, size=pool_size).astype(np.float32)
+        self.rand_pool_ptr = self.rand_pool.ctypes.data_as(C.POINTER(C.c_float))
+        self.rand_idx = C.c_int(0) # Index counter
 
-        # done flag
-        self.done_flag = C.c_int(0)
+        # Observation Buffer
+        self.obs_buffer = np.zeros(n_agents * OBS_DIM_ALIGNED, dtype=np.float32)
+        self.obs_buffer_ptr = self.obs_buffer.ctypes.data_as(C.POINTER(C.c_float))
 
+        # --- Initialize Shared C Struct ---
+        self.state = EnvState()
+        
+        # Config
+        self.state.grid_h = self.h
+        self.state.grid_w = self.w
+        self.state.n_agents = self.n_agents
+        self.state.grid = self.grid.ctypes.data_as(C.POINTER(C.c_int8))
+        
+        # Pointers that don't change
+        self.state.ghost_actions = self.ghost_actions.ctypes.data_as(C.POINTER(C.c_int))
+        self.state.ghost_rewards = self.ghost_rewards.ctypes.data_as(C.POINTER(C.c_float))
+        
+        # Pointers for RNG and Obs
+        self.state.rand_pool = self.rand_pool_ptr
+        self.state.rand_pool_size = pool_size
+        self.state.rand_idx = C.pointer(self.rand_idx)
+        self.state.obs_out = self.obs_buffer_ptr
+
+        # Python tracking
+        self.pac_x = 0
+        self.pac_y = 0
         self.step_count = 0
 
-    # ------------------------------------------------------------------
-    # Environment API
-    # ------------------------------------------------------------------
     def reset(self):
-        """
-        Reset the environment to a simple, deterministic initial state.
-
-        - Ghosts are placed in a small block starting at (1,1).
-        - Pacman starts roughly at the center of the grid.
-        """
+        """Reset environment to initial state."""
+        # 1. Reset Ghosts (Simple formation)
         for i in range(self.n_agents):
-            self.ghosts[i].alive = 1
-            self.ghosts[i].x = 1 + (i % max(1, (self.w - 2)))
-            self.ghosts[i].y = 1 + (i // max(1, (self.w - 2)))
+            self.ptr_ghosts_in[i].alive = 1
+            self.ptr_ghosts_in[i].x = 1 + (i % max(1, (self.w - 2)))
+            self.ptr_ghosts_in[i].y = 1 + (i // max(1, (self.w - 2)))
 
-        self.pac_x.value = self.w // 2
-        self.pac_y.value = self.h // 2
+        # 2. Reset Pacman
+        self.pac_x = self.w // 2
+        self.pac_y = self.h // 2
 
+        # 3. Reset Counters
         self.step_count = 0
-        self.done_flag.value = 0
-
+        self.rand_idx.value = 0 # Reset RNG index
+        
         return self._get_obs()
 
     def _get_obs(self):
-        """
-        Build a minimal observation:
-        - ghosts: (n_agents, 2) array of (x, y)
-        - pacman: (2,) array of (x, y)
-        """
-        ghosts_pos = np.empty((self.n_agents, 2), dtype=np.int32)
-        for i in range(self.n_agents):
-            ghosts_pos[i, 0] = self.ghosts[i].x
-            ghosts_pos[i, 1] = self.ghosts[i].y
+        raw_tensor = self.obs_buffer.reshape((self.n_agents, OBS_DIM_ALIGNED))
+        
+        ghost_obs_tensor = raw_tensor[:, :OBS_DIM].copy()
 
-        pac_pos = np.array([self.pac_x.value, self.pac_y.value], dtype=np.int32)
-        return {"ghosts": ghosts_pos, "pacman": pac_pos}
+        pac_pos = np.array([self.pac_x, self.pac_y], dtype=np.int32)
+        
+        return {
+            "ghost_tensor": ghost_obs_tensor, # (N, 17)
+            "pacman": pac_pos
+        }
 
-    def step(
-        self,
-        ghost_actions: np.ndarray,
-        pacman_action: int,
-        pacman_speed: int = 2,
-    ):
-        """
-        Apply one environment step.
+    def step(self, ghost_actions: np.ndarray, pacman_action: int, pacman_speed: int = 2):
+        # 1. Prepare Inputs
+        self.ghost_actions[:] = ghost_actions[:] 
 
-        Parameters
-        ----------
-        ghost_actions : np.ndarray, shape (n_agents,)
-            Discrete actions in {0,1,2,3,4} for each ghost.
-        pacman_action : int
-            Discrete action in {0,1,2,3,4}.
-        pacman_speed : int, default=2
-            Pacman's speed in {0,1,2}. 0 = stay, 1 = move 1 cell, 2 = move up to 2 cells.
+        # Update dynamic pointers (Double Buffering)
+        self.state.ghosts_in = C.cast(self.ptr_ghosts_in, C.POINTER(AgentState))
+        self.state.ghosts_out = C.cast(self.ptr_ghosts_out, C.POINTER(AgentState))
+        
+        # Update Scalars
+        self.state.pacman_x_in = self.pac_x
+        self.state.pacman_y_in = self.pac_y
+        self.state.pacman_action = int(pacman_action)
+        self.state.pacman_speed = int(pacman_speed)
+        
+        # 2. Call C Kernel
+        lib.step_env_apply_actions_sequential(C.byref(self.state))
 
-        Returns
-        -------
-        obs : dict
-            {"ghosts": (n_agents,2), "pacman": (2,)}
-        reward : dict
-            {"ghosts": np.ndarray (n_agents,), "pacman": float}
-        done : bool
-            True if episode ended.
-        info : dict
-            Reserved for future use.
-        """
-        assert ghost_actions.shape[0] == self.n_agents
-        ghost_actions = ghost_actions.astype(np.int32)
-        self.ghost_actions[:] = ghost_actions
+        # 3. Update Python State
+        self.pac_x = self.state.pacman_x_out
+        self.pac_y = self.state.pacman_y_out
+        
+        # Swap buffers
+        self.ptr_ghosts_in, self.ptr_ghosts_out = self.ptr_ghosts_out, self.ptr_ghosts_in
 
-        # clamp pacman_speed to [0,2] for safety
-        if pacman_speed < 0:
-            pacman_speed = 0
-        elif pacman_speed > 2:
-            pacman_speed = 2
-
-        self.pac_reward.value = 0.0
-        self.done_flag.value = 0
-
-        lib.step_env_apply_actions_sequential(
-            self.h,
-            self.w,
-            self.grid_ptr,
-            self.n_agents,
-            self.ghosts,              # ghosts_in
-            self.ghost_actions_ptr,
-            self.ghosts_next,         # ghosts_out
-            self.pac_x.value,
-            self.pac_y.value,
-            C.c_int(int(pacman_action)),
-            C.c_int(int(pacman_speed)),
-            C.byref(self.pac_x_next),
-            C.byref(self.pac_y_next),
-            self.ghost_rewards_ptr,
-            C.byref(self.pac_reward),
-            C.byref(self.done_flag),
-        )
-
-        # swap ghost buffers
-        self.ghosts, self.ghosts_next = self.ghosts_next, self.ghosts
-
-        # update pacman state
-        self.pac_x.value = self.pac_x_next.value
-        self.pac_y.value = self.pac_y_next.value
-
+        # 4. Finalize
         self.step_count += 1
-        done = bool(self.done_flag.value or self.step_count >= self.max_steps)
+        is_done = bool(self.state.done or self.step_count >= self.max_steps)
 
         obs = self._get_obs()
         reward = {
             "ghosts": self.ghost_rewards.copy(),
-            "pacman": float(self.pac_reward.value),
+            "pacman": float(self.state.pacman_reward),
         }
-        info = {}
+        
+        return obs, reward, is_done, {}
+    
 
-        return obs, reward, done, info
+class PacmanVecEnv:
+    """
+    Level 2 Vectorized Environment.
+    Manages a batch of environments in a single contiguous memory block
+    to allow OpenMP parallelization in C.
+    """
+    def __init__(self, grid: np.ndarray, n_envs: int = 16, n_agents: int = 16, max_steps: int = 200):
+        self.n_envs = n_envs
+        self.n_agents = n_agents
+        self.max_steps = max_steps
+        self.h, self.w = grid.shape
+        
+        # 1. Contiguous Memory Allocation)
+        self.env_states = (EnvState * n_envs)()
+        
+        # 2. (Grid & Random Pool)
+        self.grid_np = grid.astype(np.int8).copy()
+        self.grid_ptr = self.grid_np.ctypes.data_as(C.POINTER(C.c_int8))
+        
+        pool_size = 1_000_000
+        self.rand_pool = np.random.uniform(0, 1, size=pool_size).astype(np.float32)
+        self.rand_pool_ptr = self.rand_pool.ctypes.data_as(C.POINTER(C.c_float))
+        
+        # 3. Inside Pointer for every environment
+        self._keep_alive = []
+        
+        for i in range(n_envs):
+            s = self.env_states[i]
+            
+            # Config
+            s.grid_h = self.h
+            s.grid_w = self.w
+            s.n_agents = n_agents
+            s.grid = self.grid_ptr
+            s.rand_pool = self.rand_pool_ptr
+            s.rand_pool_size = pool_size
+            
+            # Allocation
+            ghosts_in = (AgentState * n_agents)()
+            ghosts_out = (AgentState * n_agents)()
+            ghost_actions = (C.c_int * n_agents)()
+            ghost_rewards = (C.c_float * n_agents)()
+            
+            # 32 float aligned observation
+            obs = (C.c_float * (n_agents * OBS_DIM_ALIGNED))()
+            rand_idx = C.c_int(i * 100) 
+            
+            # Linking
+            s.ghosts_in = C.cast(ghosts_in, C.POINTER(AgentState))
+            s.ghosts_out = C.cast(ghosts_out, C.POINTER(AgentState))
+            s.ghost_actions = C.cast(ghost_actions, C.POINTER(C.c_int))
+            s.ghost_rewards = C.cast(ghost_rewards, C.POINTER(C.c_float))
+            s.obs_out = C.cast(obs, C.POINTER(C.c_float))
+            s.rand_idx = C.pointer(rand_idx)
+            
+            # Initialize Scalars
+            s.pacman_x_in = self.w // 2
+            s.pacman_y_in = self.h // 2
+            s.pacman_action = 0
+            s.pacman_speed = 2
+            s.done = 0
+            
+            # Keep alive
+            self._keep_alive.append((ghosts_in, ghosts_out, ghost_actions, ghost_rewards, obs, rand_idx))
+            
+       
+            
+    def reset(self):
+        """reset every env"""
+        for i in range(self.n_envs):
+            s = self.env_states[i]
+            s.pacman_x_in = self.w // 2
+            s.pacman_y_in = self.h // 2
+            s.done = 0
+            
+            # Reset Ghosts
+            ghosts_in = self._keep_alive[i][0] # Retrieve from keep_alive
+            for j in range(self.n_agents):
+                ghosts_in[j].alive = 1
+                ghosts_in[j].x = 1
+                ghosts_in[j].y = 1
+                
+        return self._get_batch_obs()
+
+    def step(self, actions):
+        """
+        actions: shape (n_envs, n_agents) of int32
+        pacman_actions: shape (n_envs,) of int32 (Optional, default 0)
+        """
+        for i in range(self.n_envs):
+            # ghost_actions array (C type)
+            c_actions = self._keep_alive[i][2] 
+            # actions[i] is numpy array
+            for j in range(self.n_agents):
+                c_actions[j] = actions[i, j]
+                
+            # Update double buffering pointers (swap in/out)
+            s = self.env_states[i]
+            temp = s.ghosts_in
+            s.ghosts_in = s.ghosts_out
+            s.ghosts_out = temp
+            
+            s.pacman_x_in = s.pacman_x_out
+            s.pacman_y_in = s.pacman_y_out
+            
+        lib.step_env_apply_actions_batch(self.env_states, self.n_envs)
+        
+        
+        obs = self._get_batch_obs()
+        
+        
+        rewards = np.zeros((self.n_envs, self.n_agents), dtype=np.float32)
+        dones = np.zeros(self.n_envs, dtype=bool)
+        
+        for i in range(self.n_envs):
+            c_rewards = self._keep_alive[i][3]
+            for j in range(self.n_agents):
+                rewards[i, j] = c_rewards[j]
+            dones[i] = bool(self.env_states[i].done)
+            
+        return obs, rewards, dones, {}
+
+    def _get_batch_obs(self):
+        """
+        Observation
+        Return: (n_envs, n_agents, 17)
+        """
+        batch_obs = np.zeros((self.n_envs, self.n_agents, 17), dtype=np.float32)
+        
+        for i in range(self.n_envs):
+            
+            c_obs = self._keep_alive[i][4] # obs buffer
+            
+            flat_view = np.ctypeslib.as_array(c_obs)
+        
+            full_view = flat_view.reshape((self.n_agents, OBS_DIM_ALIGNED))
+            
+            batch_obs[i] = full_view[:, :OBS_DIM]
+            
+        return batch_obs
