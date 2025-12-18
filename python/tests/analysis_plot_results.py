@@ -98,6 +98,12 @@ def parse_hybrid_log(filepath):
                     strat = strat_match.group(1).replace(" ", "")
                     tp = float(tp_match.group(1))
                     
+                    # [可選修改] 如果是混合模式，統一改名為 "Hybrid"
+                    # 判斷邏輯：既不是純 MPI (64,1) 也不是純 OpenMP (1,64)
+                    r, t = map(int, strat.split(','))
+                    if r != 64 and t != 64:
+                        strat = "Hybrid"  # 這樣 16,4 和 4,16 都會變成 "Hybrid"
+                    
                     if current_scenario not in data: data[current_scenario] = {}
                     data[current_scenario][strat] = tp
     return data
