@@ -44,7 +44,7 @@ We utilize `pytest` to run a comprehensive suite of unit and integration tests. 
 ```bash
 cd python/tests
 # Run the full suite with verbose output
-pytest -v verify_00_machanics.py level1/correctness/verify_01_thread_safety.py level2/correctness/verify_02_mem_isolation.py level3/correctness/verify_03_mpi_consistemcy.py
+pytest -v verify_00_mechanics.py level1/correctness/verify_01_thread_safety.py level2/correctness/verify_02_mem_isolation.py level3/correctness/verify_03_mpi_consistency.py
 ```
 ### Detailed Test Breakdown
 **A. Game Mechanics & Scalability Stress (`verify_00_machanics.py`)**
