@@ -4,10 +4,10 @@
 ============================================================
 Experiment                     | Metric          | Best Result
 ------------------------------------------------------------
-Level 1 (OpenMP Agent)         | Max Throughput  | 1779 steps/s
-Level 2 (OpenMP Env)           | Max Speedup     | 31.06x
-Level 3 (MPI Distributed)      | Max Speedup     | 60.81x
+Level 1 (OpenMP Agent)         | Max Throughput  | 1774 steps/s
+Level 2 (OpenMP Env)           | Max Speedup     | 31.25x
+Level 3 (MPI Distributed)      | Max Speedup     | 61.57x
 Hybrid (Heavy Load, 64c)       | Best Strategy   | 16,4
                                | Throughput      | 254 env_steps/s
 Exp 05 (Multilevel Arch)       | Best Strategy   | Pure MPI (L3)
-                               | Throughput      | 1555 env_steps/s
+                               | Throughput      | 1556 env_steps/s

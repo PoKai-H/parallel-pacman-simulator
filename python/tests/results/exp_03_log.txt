@@ -3,27 +3,27 @@ MPI Strong Scaling Test (Total Workload: 64 Envs)
    Settings: 1024 Agents/Env, 5 Steps
 ==========================================================
 Running Baseline (1 Rank)...
- -> Baseline FPS: 103.37
+ -> Baseline FPS: 102.59
 Running with 2 Ranks (Load: 32 Envs/Rank)...
- -> 2 Ranks FPS: 190.62 | Speedup: x1.84 | Eff: 92%
+ -> 2 Ranks FPS: 199.57 | Speedup: x1.95 | Eff: 97%
 Running with 4 Ranks (Load: 16 Envs/Rank)...
- -> 4 Ranks FPS: 389.44 | Speedup: x3.77 | Eff: 94%
+ -> 4 Ranks FPS: 348.67 | Speedup: x3.40 | Eff: 85%
 Running with 8 Ranks (Load: 8 Envs/Rank)...
- -> 8 Ranks FPS: 788.94 | Speedup: x7.63 | Eff: 95%
+ -> 8 Ranks FPS: 785.95 | Speedup: x7.66 | Eff: 96%
 Running with 16 Ranks (Load: 4 Envs/Rank)...
- -> 16 Ranks FPS: 1581.90 | Speedup: x15.30 | Eff: 96%
+ -> 16 Ranks FPS: 1587.00 | Speedup: x15.47 | Eff: 97%
 Running with 32 Ranks (Load: 2 Envs/Rank)...
- -> 32 Ranks FPS: 3152.06 | Speedup: x30.49 | Eff: 95%
+ -> 32 Ranks FPS: 3119.56 | Speedup: x30.41 | Eff: 95%
 Running with 64 Ranks (Load: 1 Envs/Rank)...
- -> 64 Ranks FPS: 6286.40 | Speedup: x60.81 | Eff: 95%
+ -> 64 Ranks FPS: 6316.10 | Speedup: x61.57 | Eff: 96%
 ==========================================================
 Done! Results saved to results/mpi_scaling_results.csv
 MPI Scaling Test Results
 Ranks,Throughput,Speedup,Efficiency
-1,103.37,1.0,100%
-2,190.62,1.84405533520363741898,92.20276676018187094900
-4,389.44,3.76743736093644190771,94.18593402341104769200
-8,788.94,7.63219502757086195221,95.40243784463577440200
-16,1581.90,15.30327948147431556544,95.64549675921447228400
-32,3152.06,30.49298635967882364322,95.29058237399632388500
-64,6286.40,60.81454967592144722840,95.02273386862726129400
+1,102.59,1.0,100%
+2,199.57,1.94531630763232283848,97.26581538161614192400
+4,348.67,3.39867433473048055366,84.96685836826201384100
+8,785.95,7.66107807778535919680,95.76347597231698996000
+16,1587.00,15.46934399064236280339,96.68339994151476752100
+32,3119.56,30.40803197192708841017,95.02509991227215128100
+64,6316.10,61.56642947655716931474,96.19754605712057705400

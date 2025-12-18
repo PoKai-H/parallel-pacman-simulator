@@ -63,7 +63,7 @@ def _init_states(n_envs: int, n_agents: int, seed: int, grid_np: np.ndarray | No
     states = (EnvState * n_envs)()
     keep_alive = []
 
-    # --- 2. 區塊分配 (Block Allocation) ---
+    # --- 2. Block Allocation ---
     # manual splitting memory space to prevent false sharing
 
     # [Padding Config]
@@ -129,7 +129,6 @@ def _init_states(n_envs: int, n_agents: int, seed: int, grid_np: np.ndarray | No
         s.rand_pool = rand_pool_ptr
         s.rand_pool_size = pool_size
 
-        # 設定純量
         s.pacman_x_in = w // 2
         s.pacman_y_in = h // 2
         s.pacman_action = 0
