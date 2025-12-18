@@ -11,3 +11,4 @@ Hybrid (Heavy Load, 64c)       | Best Strategy   | Hybrid
                                | Throughput      | 254 env_steps/s
 Exp 05 (Multilevel Arch)       | Best Strategy   | Pure MPI (L3)
                                | Throughput      | 1556 env_steps/s
+============================================================
