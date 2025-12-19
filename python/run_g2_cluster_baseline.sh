@@ -37,6 +37,6 @@ run_fixed_test() {
 # The parameters are `Nodes` `Ranks` `L2 Threads(envs)` `L1 Threads (agents)`
 run_fixed_test "G2_Cluster_Std" "1_Dist_Thread_L2" 4 4 64 1
 run_fixed_test "G2_Cluster_Std" "2_Dist_Nested_16x4" 4 4 16 4
-# run_fixed_test "G2_Cluster_Std" "3_Dist_Nested_4x16" 4 4 4 16 # avoid this test
+run_fixed_test "G2_Cluster_Std" "3_Dist_Nested_4x16" 4 4 4 16
 run_fixed_test "G2_Cluster_Std" "4_Cluster_Hybrid" 4 16 16 1
-run_fixed_test "G2_Cluster_Std" "5_Cluster_Process_Max" 4 256 1 1
+# run_fixed_test "G2_Cluster_Std" "5_Cluster_Process_Max" 4 256 1 1
