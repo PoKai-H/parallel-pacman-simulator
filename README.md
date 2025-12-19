@@ -113,6 +113,7 @@ Located in `python/`
 7.`run_g2_cluster_baseline.sh:`
 
 - Goal: Multi-node baseline without specific optimizations.
+- Cautious: This test would take more time to run.
 
 8.`run_g3_hybrid_opt.sh:`
 
