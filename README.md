@@ -99,6 +99,8 @@ Located in `python/tests/`
 
 - Goal: Evaluates hierarchical parallelism (MPI nodes + OpenMP threads).
 
+`run_all_experiments.sh` to run every test in Micro-Benchmarks & Scaling Analysis
+
 ### Part 2: Full System Scenarios
 
 Located in `python/`
